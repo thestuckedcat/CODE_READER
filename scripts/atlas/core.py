@@ -1,7 +1,7 @@
 """Content-addressed artifacts and crash-safe single-writer checkpoints."""
 import hashlib, json, os, sqlite3, uuid
 from pathlib import Path
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 SCHEMA = '0.1'
 def encoded(x): return json.dumps(x, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
 def digest(x): return hashlib.sha256(x if isinstance(x, bytes) else encoded(x)).hexdigest()

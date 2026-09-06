@@ -5,7 +5,7 @@ from .core import digest
 def merge(results):
     by_kind=defaultdict(dict)
     for result in results:
-        for f in result['facts']:by_kind[f['kind']][f['id']]=f
+        for f in result['facts']:by_kind[f['kind']][f['id']]=dict(f)
     fs=list(by_kind['function'].values()); index=defaultdict(list)
     for f in fs:index[f['base_id']].append(f)
     calls=list(by_kind['callsite'].values());edges=[];issues=[];flows=list(by_kind['flow'].values())
@@ -15,9 +15,13 @@ def merge(results):
         issues.append(row);return row['id']
     for c in calls:
         targets=index.get(c['target_base'],[])
+        local=[f for f in targets if set(f.get('tu_ids',[]))&set(c.get('tu_ids',[]))]
+        same_build=[f for f in targets if f.get('build_id')==c.get('build_id')]
+        targets=local or same_build or targets
+        if c.get('boundary_kind'):targets=[]
         if not targets:
             c['review_issue_ids']=[issue(c,'external_boundary' if c['dispatch']=='direct' else 'semantic_unresolved',
-                'Definition outside analyzed scope or unavailable' if c['dispatch']=='direct' else 'Indirect target requires registration/alias evidence')]
+                'Stop at '+c['boundary_kind'] if c.get('boundary_kind') else 'Implementation not found in analyzed workspace' if c['dispatch']=='direct' else 'Indirect target requires registration/alias evidence')]
         elif c['dispatch']!='direct' or len(targets)>1:
             c['review_issue_ids']=[issue(c,'semantic_unresolved','Dispatch or definition variant has additional possible targets')]
         for f in targets:
@@ -39,22 +43,32 @@ def resolve(graph,name):
     return found[0]['id']
 
 def trace(graph,start,direction='down',depth=30,budget=5000):
+    if depth<1 or budget<1:raise ValueError('depth and budget must be positive')
     start=resolve(graph,start);adj=defaultdict(list)
     for e in graph['call_targets']:
         a,b=(e['source'],e['target']) if direction=='down' else (e['target'],e['source'])
-        adj[a].append(b)
-    paths=[];q=deque([(start,)]);truncated=False
+        adj[a].append((b,e['callsite']))
+    paths=[];q=deque([((start,),())]);truncated=False
+    boundaries=defaultdict(list)
+    for boundary in graph.get('boundaries',[]):boundaries[boundary['owner']].append(boundary)
     while q and len(paths)<budget:
-        path=q.popleft();n=path[-1];targets=sorted(set(adj[n]))
-        if len(path)>depth or not targets:
-            related=[i['id'] for i in graph['issues'] if i.get('affected_scope')==n]
-            paths.append(dict(nodes=path,stop='depth' if targets else 'unresolved_or_external_boundary' if related else 'no_known_callers' if direction=='up' else 'leaf_in_analyzed_graph',issue_ids=related));truncated|=bool(targets);continue
-        for t in targets:
-            if t in path:paths.append(dict(nodes=path+(t,),stop='recursion'))
-            elif len(q)+len(paths)>=budget:truncated=True
-            else:q.append(path+(t,))
+        path,sites=q.popleft();n=path[-1];targets=sorted(set(adj[n]))
+        if direction=='down':
+            for boundary in boundaries[n]:
+                if len(paths)>=budget:truncated=True;break
+                paths.append(dict(nodes=path,callsites=sites+(boundary['callsite'],),stop=boundary['kind'],boundary=boundary))
+        if len(paths)>=budget:
+            truncated|=bool(targets or q);break
+        if len(path)>=depth and targets:
+            paths.append(dict(nodes=path,callsites=sites,stop='depth'));truncated=True;continue
+        if not targets:
+            if direction=='up' or not boundaries[n]:paths.append(dict(nodes=path,callsites=sites,stop='no_known_callers' if direction=='up' else 'leaf_in_analyzed_graph'))
+            continue
+        for t,site in targets:
+            if len(q)+len(paths)>=budget:truncated=True;continue
+            if t in path:paths.append(dict(nodes=path+(t,),callsites=sites+(site,),stop='recursion'))
+            else:q.append((path+(t,),sites+(site,)))
     truncated|=bool(q)
-    # Paths are stored from selected interface outward, so first difference is relative to that interface.
     prefix=[]
     if paths:
         for values in zip(*(p['nodes'] for p in paths)):
@@ -62,6 +76,7 @@ def trace(graph,start,direction='down',depth=30,budget=5000):
             prefix.append(values[0])
     choices=sorted({p['nodes'][len(prefix)] for p in paths if len(p['nodes'])>len(prefix)})
     return dict(start=start,direction=direction,paths=paths,common_prefix=prefix,first_divergence_choices=choices,truncated=truncated,
+                top_functions=sorted({p['nodes'][-1] for p in paths if p['stop']=='no_known_callers'}),
                 coverage=graph.get('coverage',{}),completeness='within_analyzed_graph_only',unknown_issue_ids=[i['id'] for i in graph['issues'] if i['kind']=='semantic_unresolved'])
 
 def flow_trace(graph,symbol,budget=2000):

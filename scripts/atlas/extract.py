@@ -5,7 +5,9 @@ FUNCTIONS={'FUNCTION_DECL','CXX_METHOD','CONSTRUCTOR','DESTRUCTOR','CONVERSION_F
 TYPES={'STRUCT_DECL','CLASS_DECL','UNION_DECL','ENUM_DECL','TYPEDEF_DECL','TYPE_ALIAS_DECL'}
 BRANCHES={'IF_STMT','SWITCH_STMT','FOR_STMT','WHILE_STMT','DO_STMT','CONDITIONAL_OPERATOR'}
 
-def extract(unit,roots):
+def extract(unit,roots,rules=None):
+    from .boundaries import classify
+    rules=rules or {}
     from clang import cindex as cx
     tu=cx.Index.create().parse(unit['file'],args=unit['arguments'],options=cx.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
     diagnostics=[dict(severity=d.severity,message=d.spelling,file=str(d.location.file) if d.location.file else None,
@@ -17,7 +19,7 @@ def extract(unit,roots):
     def inside(c):
         if not c.location.file:return False
         p=Path(str(c.location.file)).resolve()
-        return any(p.is_relative_to(r) for r in roots)
+        return not classify(p,roots,rules) and any(p.is_relative_to(r) for r in roots)
     def raw(c):
         if not c.extent.start.file:return ''
         p=str(Path(str(c.extent.start.file)).resolve())
@@ -36,7 +38,7 @@ def extract(unit,roots):
         return 's_'+digest(u or [str(c.location.file),c.location.offset,c.kind.name,c.spelling])[:24]
     def var(c):return base(c)
     def put(kind,c,**kw):
-        rec=dict(kind=kind,evidence_ids=[anchor(c)],origin='compiler',**kw)
+        rec=dict(kind=kind,evidence_ids=[anchor(c)],origin='compiler',tu_ids=[unit['id']],build_id=unit.get('build_id'),**kw)
         if rec.get('id') not in seen: facts.append(rec);seen.add(rec.get('id'))
         return rec
     def refs(c):
@@ -57,7 +59,7 @@ def extract(unit,roots):
         if c.location.file and not inside(c):return
         kind=c.kind.name
         if kind in FUNCTIONS and c.is_definition() and inside(c):
-            identity=base(c);fid='f_'+digest([identity,c.type.spelling,raw(c)])[:24]
+            identity=base(c);fid='f_'+digest([identity,c.type.spelling,' '.join(t.spelling for t in c.get_tokens()),unit['id']])[:24]
             params=[]
             for i,p in enumerate(c.get_arguments() or []):
                 pid=var(p);params.append(dict(id=pid,name=p.spelling,type=p.type.spelling,index=i))
@@ -68,7 +70,7 @@ def extract(unit,roots):
             ir.append(dict(id=fid,format='clang_cursor_operations',cfg_status='unsupported',operations=[]))
         elif kind in TYPES and inside(c) and c.spelling:
             fields=[dict(id=var(f),name=f.spelling,type=f.type.spelling,offset_bits=f.get_field_offsetof()) for f in c.get_children() if f.kind.name=='FIELD_DECL']
-            put('type',c,id=base(c),name=c.spelling,type_kind=kind,fields=fields,size_bytes=c.type.get_size(),layout_configuration=unit['id'])
+            put('type',c,id=base(c)+'_'+unit['id'][:12],name=c.spelling,type_kind=kind,fields=fields,size_bytes=c.type.get_size(),layout_configuration=unit['id'])
         elif kind=='VAR_DECL' and inside(c):
             vid=var(c);put('object',c,id=vid,name=c.spelling,type=c.type.spelling,owner=owner,
                           storage=c.storage_class.name,lifetime='static' if not owner or c.storage_class.name=='STATIC' else 'automatic')
@@ -79,11 +81,16 @@ def extract(unit,roots):
             ref=c.referenced;target=base(ref) if ref and ref.kind.name in FUNCTIONS else None
             virtual=bool(ref and ref.kind.name=='CXX_METHOD' and ref.is_virtual_method())
             cid='c_'+digest([owner,anchor(c)])[:24]
+            ref_path=str(Path(str(ref.location.file)).resolve()) if ref and ref.location.file else None
+            stop=classify(ref_path,roots,rules,bool(ref and ref.location.is_in_system_header))
+            if not stop and ref and ref.kind.name in ('CONSTRUCTOR','DESTRUCTOR','CXX_METHOD') and ref.is_default_method():stop='implicit_special_member'
+            definition=ref.get_definition() if ref else None
+            definition_path=str(Path(str(definition.location.file)).resolve()) if definition and definition.location.file else None
             args=[]
             for i,a in enumerate(c.get_arguments()):args.append(dict(index=i,expression=raw(a),sources=refs(a),evidence_ids=[anchor(a)]))
             put('callsite',c,id=cid,owner=owner,callee=c.spelling or raw(c).split('(')[0],target_base=target,
                 dispatch='virtual' if virtual else 'direct' if target else 'indirect',arguments=args,guards=guards,
-                expression=raw(c),unknown_target_possible=virtual or not bool(target))
+                expression=raw(c),target_declaration=ref_path,target_definition=definition_path,boundary_kind=stop,unknown_target_possible=virtual or not bool(target))
         elif kind in ('BINARY_OPERATOR','COMPOUND_ASSIGNMENT_OPERATOR') and owner:
             ch=list(c.get_children())
             if len(ch)>=2:
@@ -104,7 +111,7 @@ def extract(unit,roots):
         child_guards=guards+[dict(kind=kind,expression=raw(c)[:300],branch_polarity='not_solved')] if kind in BRANCHES else guards
         for ch in c.get_children():walk(ch,owner,child_guards)
     walk(tu.cursor)
-    deps={unit['file']:filehash(unit['file'])}
+    deps={unit['file']:filehash(unit['file']),**unit.get('response_inputs',{})}
     for inc in tu.get_includes():
         p=str(Path(str(inc.include)).resolve());deps[p]=filehash(p)
     facts += [dict(kind='evidence',**e) for e in evidence.values()]

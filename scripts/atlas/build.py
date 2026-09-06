@@ -24,65 +24,76 @@ def doctor():
         checks['libclang_path']=str(cindex.conf.get_filename())
         checks['libclang_hash']=filehash(cindex.conf.get_filename())
     except Exception as e:checks['libclang']=str(e)
-    return dict(python=sys.version,platform=sys.platform,checks=checks,ready=checks['libclang']=='loaded',
+    import platform
+    layers=dict(tools=dict(parse='ready' if checks['libclang']=='loaded' else 'blocked',configure='ready' if checks['cmake'] else 'needs_cmake_or_compdb'),project_configuration='checked_by_configure',source_dependencies='checked_per_TU')
+    return dict(python=sys.version,platform=sys.platform,architecture=platform.machine(),layers=layers,checks=checks,ready=checks['libclang']=='loaded',
                 capabilities=dict(native_cfg=False,interprocedural_alias=False,clang_ast=True))
 
 def configure(args,store,rows):
-    import json
-    parameters=read(args.params) if args.params else {}
-    if 'payload' in parameters:parameters=parameters['payload']
-    if not isinstance(parameters,dict) or any(not isinstance(v,(str,int,float,bool)) for v in parameters.values()):
-        raise ValueError('--params expects a JSON object of explicit CMake variable values')
-    store.put('parameters.json',[dict(name=k,value=v,origin='user',status='confirmed') for k,v in sorted(parameters.items())])
-    store.put('assumptions.json',[])
-    cmakes=[r for r in rows if Path(r['path']).name=='CMakeLists.txt' or Path(r['path']).suffix=='.cmake']
-    store.put('cmake_discovery.json',dict(entry=str(args.cmake_root or args.repo),files=cmakes,status='candidates_until_evaluated'))
-    dbs=[Path(p).resolve() for p in (args.compdb or [])]
+    from .configuration import discover,parameters,evaluate,questions
+    discovery=discover(args.repo,rows,args.cmake_root)
+    store.put('cmake_discovery.json',discovery)
+    entry=Path(discovery['entry']);values,assumptions=parameters(args,store,entry)
+    missing=[n for n in getattr(args,'require_param',[]) or [] if n not in values]
+    if missing:
+        questions(store,discovery,'Required parameters were not supplied',missing)
+        raise RuntimeError('Missing required configuration: '+', '.join(missing))
+    dbs=[Path(p).resolve() for p in (args.compdb or [])];evaluations=[]
     if not dbs:
-        if not shutil.which('cmake'):raise RuntimeError('CMake missing. Run bootstrap, or supply --compdb.')
-        entry=Path(args.cmake_root or args.repo).resolve()
-        build=store.root/'build'/digest([str(entry),parameters])[:16];build.mkdir(parents=True,exist_ok=True)
-        query=build/'.cmake/api/v1/query';query.mkdir(parents=True,exist_ok=True);(query/'codemodel-v2').touch()
-        argv=['cmake','-S',str(entry),'-B',str(build),'-DCMAKE_EXPORT_COMPILE_COMMANDS=ON']
-        cache=build/'CMakeCache.txt'
-        prior=re.search(r'^CMAKE_GENERATOR:INTERNAL=(.+)$',cache.read_text(errors='replace'),re.M) if cache.exists() else None
-        if prior:argv+=['-G',prior.group(1)]
-        elif shutil.which('ninja'):argv+=['-G','Ninja']
-        elif os.name!='nt':argv+=['-G','Unix Makefiles']
-        else:raise RuntimeError('Ninja required for Windows compilation database generation')
-        argv += ['-D'+k+'='+('ON' if v is True else 'OFF' if v is False else str(v)) for k,v in sorted(parameters.items())]
-        store.put('configure_request.json',dict(argv=argv,cwd=str(entry)))
-        r=subprocess.run(argv,cwd=entry,capture_output=True,text=True,errors='replace',timeout=args.configure_timeout)
-        (store.run/'configure.stdout.log').write_text(r.stdout,encoding='utf-8');(store.run/'configure.stderr.log').write_text(r.stderr,encoding='utf-8')
-        store.put('configure_result.json',dict(exit_code=r.returncode,stdout=r.stdout,stderr=r.stderr,build=str(build)))
-        if r.returncode:
-            store.put('configuration_questions.json',dict(status='needs_configuration',message='Read CMake error, identify missing values; do not invent semantic defaults',diagnostic=r.stderr))
-            raise RuntimeError('CMake configuration failed. See '+str(store.run/'configure.stderr.log'))
-        dbs=sorted(build.rglob('compile_commands.json'))
-        replies=sorted(build.rglob('reply/*.json'))
-        for p in replies:store.put('cmake_reply.json',read(p),str(p))
-        if not dbs:raise RuntimeError('No compile_commands.json. Superbuild may need child configuration; provide repeated --compdb for evaluated child builds.')
+        evaluations.append(evaluate(entry,values,args,store,discovery))
+    for i,child in enumerate(getattr(args,'child_cmake_root',[]) or []):
+        evaluations.append(evaluate(child,values,args,store,discovery,'child'+str(i)))
+    for evaluation in evaluations:
+        dbs.extend(Path(p) for p in evaluation['databases'])
+    dbs=sorted(set(dbs))
+    relations=[r for ev in evaluations for r in ev['relations']]
+    external=[e for ev in evaluations for e in ev['external_projects']]
+    store.put('cmake_relations.json',dict(relations=relations,external_projects=external))
+    store.put('generated_files.json',[f for ev in evaluations for f in ev['generated']])
+    if not dbs:
+        questions(store,discovery,'No compile database. Independently configure existing ExternalProject SOURCE_DIR with --child-cmake-root and explicit parameters, or supply --compdb. No downloads/builds are triggered automatically.')
+        raise RuntimeError('No compilation database; independent child configuration is required')
+    targets=[t for ev in evaluations for t in ev['targets']]
     units=[]
     for p in dbs:
+        if not p.is_file():raise ValueError('Compilation database missing: '+str(p))
         entries=read(p);store.put('compile_commands.json',entries,str(p),origin='cmake')
         for e in entries:
             cwd=Path(e['directory']).resolve();src=Path(e['file']);src=(cwd/src).resolve() if not src.is_absolute() else src.resolve()
             argv=e.get('arguments')
             if argv is None:
                 if os.name=='nt':
-                    # LLVM's compilation database reader handles Windows command-line quoting.
                     from clang.cindex import CompilationDatabase
                     commands=CompilationDatabase.fromDirectory(str(p.parent)).getCompileCommands(str(src))
-                    if commands: argv=list(next(iter(commands)).arguments)
+                    if commands:argv=list(next(iter(commands)).arguments)
                     else:raise ValueError('No native compilation command for '+str(src))
                 else:argv=shlex.split(e['command'])
-            units.append(normalize(src,cwd,list(argv),args, e.get('output','')))
+            u=normalize(src,cwd,list(argv),args,e.get('output',''))
+            u['database']=str(p);u['build_id']=digest(str(p.parent))
+            u['target_names']=sorted(set(re.findall(r'CMakeFiles/([^/]+)\.dir/', ' '.join(argv).replace('\\','/'))))
+            if not u['target_names']:
+                u['target_names']=sorted({t['name'] for t in targets for f in t.get('sources',[]) if (Path(t['source_root'])/f['path']).resolve()==src})
+            units.append(u)
     units=list({u['id']:u for u in units}.values())
-    store.put('build_context.json',dict(units=units,databases=[str(p) for p in dbs],configuration_id=digest(units)))
+    config_inputs={k:v for ev in evaluations for k,v in ev['inputs'].items()}
+    store.setmeta('current_build_context',dict(assumptions=assumptions,parameters=values,inputs=config_inputs,external_projects=external,targets=targets))
+    store.put('build_context.json',dict(units=units,databases=[str(p) for p in dbs],targets=targets,configuration_id=digest(units),assumptions=assumptions,parameters=values))
+    store.put('configuration_questions.json',dict(status='ready',items=[],external_projects=external))
     return units
 
 def normalize(src,cwd,argv,args,output):
-    original=argv[:]
+    original=argv[:];response_inputs={}
+    def expand(tokens,active=()):
+        output=[]
+        for token in tokens:
+            if not token.startswith('@'):output.append(token);continue
+            path=(cwd/token[1:]).resolve()
+            if str(path) in active or len(active)>=8:raise ValueError('Cyclic/deep response file: '+str(path))
+            if os.name=='nt':raise ValueError('Windows response quoting not yet supported; provide expanded arguments')
+            response_inputs[str(path)]=filehash(path)
+            output.extend(expand(shlex.split(path.read_text()),active+(str(path),)))
+        return output
+    argv=expand(argv)
     if Path(argv[0]).name in ('ccache','sccache'):argv=argv[1:]
     compiler=argv.pop(0)
     if Path(compiler).stem.lower() in ('cl','clang-cl'):
@@ -96,10 +107,9 @@ def normalize(src,cwd,argv,args,output):
         try:
             if not a.startswith('-') and (cwd/a).resolve()==src:continue
         except OSError:pass
-        if a.startswith('@'):raise ValueError('Response files need explicit expansion before analysis: '+a)
         result.append(a)
     resource=Path(__file__).resolve().parents[2]/'runtime/clang-resource'
     if resource.is_dir(): result+=['-resource-dir='+str(resource)]
     result+=args.clang_arg or []
     return dict(id=digest([str(src),str(cwd),result]),file=str(src),directory=str(cwd),arguments=result,
-                original_arguments=original,compiler=compiler,removed_nonsemantic_flags=removed,output=output)
+                original_arguments=original,compiler=compiler,removed_nonsemantic_flags=removed,output=output,response_inputs=response_inputs)

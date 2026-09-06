@@ -14,7 +14,7 @@ def main():
     r=subs.add_parser('run');r.add_argument('--repo',required=True);r.add_argument('--out',required=True)
     r.add_argument('--root',action='append',help='Additional complete source root (repeatable)')
     r.add_argument('--compdb',action='append',help='Evaluated compile_commands.json (repeatable)')
-    r.add_argument('--cmake-root');r.add_argument('--params');r.add_argument('--target');r.add_argument('--interface')
+    r.add_argument('--child-cmake-root',action='append');r.add_argument('--require-param',action='append');r.add_argument('--assumptions');r.add_argument('--linux-root',action='append');r.add_argument('--glibc-root',action='append');r.add_argument('--select-function');r.add_argument('--unit');r.add_argument('--cmake-root');r.add_argument('--params');r.add_argument('--target');r.add_argument('--interface')
     r.add_argument('--direction',choices=['up','down','both'],default='down');r.add_argument('--clang-arg',action='append')
     r.add_argument('--max-tu',type=int,default=128);r.add_argument('--tu-timeout',type=int,default=120);r.add_argument('--configure-timeout',type=int,default=180);r.add_argument('--html')
     e=subs.add_parser('export');e.add_argument('--out',required=True);e.add_argument('--html',required=True)
@@ -26,7 +26,7 @@ def main():
     args=p.parse_args()
     if args.cmd=='selftest':
         import subprocess
-        return subprocess.run([sys.executable,str(package/'tests/test_pipeline.py')]).returncode
+        return subprocess.run([sys.executable,str(package/'tests/run_tests.py')]).returncode
     if args.cmd=='doctor':
         from atlas.build import doctor
         result=doctor()
@@ -34,7 +34,7 @@ def main():
         print(json.dumps(result,indent=2));return 0 if result['ready'] else 2
     if args.cmd=='_extract':
         from atlas.extract import extract
-        d=read(args.input);write(args.output,extract(d['unit'],[Path(p) for p in d['roots']]));return 0
+        d=read(args.input);write(args.output,extract(d['unit'],[Path(p) for p in d['roots']],d.get('rules')));return 0
     if args.cmd=='run':
         from atlas.pipeline import run
         if args.max_tu<1:raise ValueError('--max-tu must be positive')

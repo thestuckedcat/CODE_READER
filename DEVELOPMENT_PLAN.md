@@ -1,6 +1,6 @@
 # CODE_READER 开发计划与功能验收矩阵
 
-更新日期：2026-09-06。当前版本：SDK Code Atlas 0.1 原型。
+更新日期：2026-09-06。原始计划基线：SDK Code Atlas 0.1。第 1 轮 v0.2 的最新实现/验收状态见 [update/001_round1_changes.md](update/001_round1_changes.md)；以下初始状态保留作计划对照。
 代码基线：[389ab62](https://github.com/thestuckedcat/CODE_READER/commit/389ab627736fecfddb792d800d69b88718133af5)；总体设计根目录补充：[d734720](https://github.com/thestuckedcat/CODE_READER/commit/d7347201f9317e8a26d436df72be22f34334ee46)。
 
 本文跟踪当前交付与后续六轮开发。每一轮是可独立验收的阶段，可拆成多个 PR；不是六次对话或承诺六个固定工期。当前基础原型记为第 0 轮，后续第 1—6 轮尚未整轮完成。
