@@ -4,6 +4,7 @@ C/C++ Linux SDK 阅读工具的第一版 Skill 原型：CMake 求值 → Clang �
 
 ## 从哪里开始
 
+- 开发计划与验收矩阵：[DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)
 - Skill 入口：[SKILL.md](SKILL.md)
 - 当前可用能力及限制：[references/capabilities.md](references/capabilities.md)
 - 操作说明：[references/workflow.md](references/workflow.md)
