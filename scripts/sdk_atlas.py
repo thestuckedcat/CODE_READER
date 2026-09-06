@@ -16,10 +16,11 @@ def main():
     r.add_argument('--compdb',action='append',help='Evaluated compile_commands.json (repeatable)')
     r.add_argument('--child-cmake-root',action='append');r.add_argument('--require-param',action='append');r.add_argument('--assumptions');r.add_argument('--linux-root',action='append');r.add_argument('--glibc-root',action='append');r.add_argument('--select-function');r.add_argument('--unit');r.add_argument('--cmake-root');r.add_argument('--params');r.add_argument('--target');r.add_argument('--interface')
     r.add_argument('--direction',choices=['up','down','both'],default='down');r.add_argument('--clang-arg',action='append')
+    r.add_argument('--dataflow',choices=['off','cfg'],default='off');r.add_argument('--native-extractor');r.add_argument('--flow-steps',type=int,default=10000);r.add_argument('--summary-steps',type=int,default=128)
     r.add_argument('--max-tu',type=int,default=128);r.add_argument('--tu-timeout',type=int,default=120);r.add_argument('--configure-timeout',type=int,default=180);r.add_argument('--html')
     e=subs.add_parser('export');e.add_argument('--out',required=True);e.add_argument('--html',required=True)
     t=subs.add_parser('trace');t.add_argument('--out',required=True);t.add_argument('--function',required=True);t.add_argument('--direction',choices=['up','down'],default='down');t.add_argument('--depth',type=int,default=30);t.add_argument('--budget',type=int,default=5000)
-    f=subs.add_parser('flow');f.add_argument('--out',required=True);f.add_argument('--symbol',required=True)
+    f=subs.add_parser('flow');f.add_argument('--out',required=True);f.add_argument('--symbol');f.add_argument('--function');f.add_argument('--parameter');f.add_argument('--value');f.add_argument('--direction',choices=['forward','backward'],default='forward');f.add_argument('--budget',type=int,default=2000)
     a=subs.add_parser('review-import');a.add_argument('--out',required=True);a.add_argument('--result',required=True)
     v=subs.add_parser('validate');v.add_argument('--out',required=True)
     x=subs.add_parser('_extract');x.add_argument('input');x.add_argument('output')
@@ -37,6 +38,7 @@ def main():
         d=read(args.input);write(args.output,extract(d['unit'],[Path(p) for p in d['roots']],d.get('rules')));return 0
     if args.cmd=='run':
         from atlas.pipeline import run
+        if args.flow_steps<1 or args.summary_steps<1:raise ValueError('Flow budgets must be positive')
         if args.max_tu<1:raise ValueError('--max-tu must be positive')
         run(args);return 0
     from atlas.pipeline import load_snapshot,publish
@@ -48,8 +50,19 @@ def main():
         from atlas.graph import trace
         print(json.dumps(trace(graph,args.function,args.direction,args.depth,args.budget),indent=2,ensure_ascii=False))
     elif args.cmd=='flow':
-        from atlas.graph import flow_trace
-        print(json.dumps(flow_trace(graph,args.symbol),indent=2,ensure_ascii=False))
+        if args.function:
+            from atlas.dataflow import trace
+            result=trace(graph,args.function,args.parameter,args.value,args.direction,args.budget)
+        elif args.symbol and graph.get('value_nodes'):
+            from atlas.dataflow import trace
+            owners={v['owner'] for v in graph['value_nodes'] if v['kind']=='parameter' and v['symbol']==args.symbol}
+            if len(owners)!=1:raise ValueError('Choose --function and --parameter for this symbol')
+            result=trace(graph,next(iter(owners)),args.symbol,direction=args.direction,budget=args.budget)
+        elif args.symbol:
+            from atlas.graph import flow_trace
+            result=flow_trace(graph,args.symbol,args.budget)
+        else:raise ValueError('Use --function for CFG flow or --symbol for legacy flow')
+        print(json.dumps(result,indent=2,ensure_ascii=False))
     elif args.cmd=='validate': print(json.dumps(dict(status='passed',snapshot_id=manifest['snapshot_id'],functions=len(graph['functions']))))
     elif args.cmd=='review-import':
         from atlas.review import validate_review

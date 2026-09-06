@@ -1,14 +1,15 @@
-# CODE_READER · SDK Code Atlas 0.2
+# CODE_READER · SDK Code Atlas 0.3
 
 C/C++ Linux SDK 阅读工具的第一版 Skill 原型：CMake 求值 → Clang 语义提取 → Python 图分析与增量缓存 → 宿主 Agent 审阅 → 离线 HTML。
 
-当前源码为 v0.2；本轮新文档统一放在 [`update/`](update/)。原完整压缩包及 runtime 仍是 v0.1 交付，现有 runtime 可继续供本轮 Python 脚本使用。
+当前源码为 v0.3；本轮新文档统一放在 [`update/`](update/)。原完整压缩包及 runtime 仍是 v0.1 交付，现有 runtime 可继续用于基础调用链；本轮新增 CFG 需另行构建 atlas-semantic，尚未重新制作完整离线包。
 
 ## 从哪里开始
 
 - 开发计划与验收矩阵：[DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)
 - 首版能力快照：[update/000_v0.1_capabilities.md](update/000_v0.1_capabilities.md)
-- 本轮修改及验证：[update/001_round1_changes.md](update/001_round1_changes.md)
+- 第一轮工程接入：[update/001_round1_changes.md](update/001_round1_changes.md)
+- 本轮 CFG/参数计算链及验证：[update/002_round2_changes.md](update/002_round2_changes.md)
 - Skill 入口：[SKILL.md](SKILL.md)
 - 当前可用能力及限制：[references/capabilities.md](references/capabilities.md)
 - 操作说明：[references/workflow.md](references/workflow.md)

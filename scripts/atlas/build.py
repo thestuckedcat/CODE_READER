@@ -25,9 +25,13 @@ def doctor():
         checks['libclang_hash']=filehash(cindex.conf.get_filename())
     except Exception as e:checks['libclang']=str(e)
     import platform
+    from .native import executable,identity
+    checks['native_extractor']=executable()
+    try:checks['native_identity']=identity(checks['native_extractor'])
+    except (OSError,RuntimeError,subprocess.SubprocessError) as e:checks['native_identity']=None;checks['native_error']=str(e)
     layers=dict(tools=dict(parse='ready' if checks['libclang']=='loaded' else 'blocked',configure='ready' if checks['cmake'] else 'needs_cmake_or_compdb'),project_configuration='checked_by_configure',source_dependencies='checked_per_TU')
     return dict(python=sys.version,platform=sys.platform,architecture=platform.machine(),layers=layers,checks=checks,ready=checks['libclang']=='loaded',
-                capabilities=dict(native_cfg=False,interprocedural_alias=False,clang_ast=True))
+                capabilities=dict(native_cfg=bool(checks['native_identity']),interprocedural_alias=False,clang_ast=True))
 
 def configure(args,store,rows):
     from .configuration import discover,parameters,evaluate,questions

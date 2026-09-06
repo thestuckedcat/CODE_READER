@@ -58,6 +58,10 @@ def analyze(args,store,roots):
     store.put('inventory.jsonl',rows)
     store.put('change_set.json',dict(initial=not bool(old),changed=changed,workspace_revisions={str(r):revision(r) for r in roots}))
     store.put('workspace_manifest.json',dict(roots=[str(r) for r in roots],revisions={str(r):revision(r) for r in roots},source_manifest_hash=digest(now)))
+    from .native import executable,identity,extract_cfg
+    native_tool=identity(executable(args.native_extractor)) if args.dataflow=='cfg' else None
+    if args.dataflow=='cfg' and not native_tool:raise RuntimeError('CFG requested but atlas-semantic is missing. Build with scripts/build_native.py or specify --native-extractor. Basic calls remain available with --dataflow off.')
+    store.put('native_tool.json',native_tool or dict(status='not_requested'))
     units=configure(args,store,rows)
     from .boundaries import policy,classify
     from .search import CandidateIndex,include_dirs
@@ -100,7 +104,7 @@ def analyze(args,store,roots):
     seed_candidates=search.definition_candidates(args.interface) if args.interface else units[:]
     pending=seed_candidates[:] if args.interface else units[:]
     if not pending:raise ValueError('Interface implementation not found in candidate source/header index')
-    results=[];processed=set();parsed=0;reused=0;failed=[];plan=[]
+    results=[];native_irs=[];native_plan=[];processed=set();parsed=0;reused=0;failed=[];plan=[]
     while pending and len(processed)<args.max_tu:
         u=pending.pop(0)
         if u['id'] in processed:continue
@@ -146,6 +150,9 @@ def analyze(args,store,roots):
             parsed+=1;plan.append(dict(unit=u['id'],file=u['file'],action='parse',reasons=reasons or ['cache_missing_or_corrupt']))
         if result['status']=='failed':failed.append(dict(file=u['file'],diagnostics=result['diagnostics']))
         results.append(result)
+        if native_tool and result['status']=='succeeded':
+            cfg,receipt=extract_cfg(u,result,store,native_tool,args.tu_timeout)
+            native_irs.extend(cfg);native_plan.append(receipt)
         if args.interface and not pending:
             g=merge(results)
             seeds={f['id'] for f in g['functions'] if f['name']==args.interface and (not getattr(args,'select_function',None) or f['id']==args.select_function)}
@@ -208,10 +215,17 @@ def analyze(args,store,roots):
                   boundary_policy=rules,candidate_index=dict(scanned_files=search.scanned,reused_files=search.reused),capabilities=dict(direct_calls='ready',types='ready',global_objects='ready',data_flow='partial_path_insensitive',cfg='unsupported',alias='unsupported',kernel_boundary_rules='not_implemented'),
                   complete_call_chain=False,completed_requested_search=not bool(pending or failed),truncated=bool(pending))
     graph['coverage']=coverage;graph['scope']=scope
+    if native_tool:
+        from .dataflow import analyze as analyze_flow
+        flow_status=analyze_flow(graph,native_irs,store,args.flow_steps,args.summary_steps)
+        coverage['capabilities'].update(cfg='clang_cfg',data_flow=flow_status['status'])
+        coverage['dataflow']=flow_status
+        store.put('native_parse_plan.json',native_plan)
+    else:graph['dataflow_status']=dict(mode='off',status='not_requested')
     store.put('parse_plan.json',plan);store.put('invalidation_plan.json',dict(changed=changed,units=plan,policy='per_TU_dependencies_and_negative_search_inventory'))
     store.put('compiler_facts.jsonl',[f for r in results for f in r['facts']])
     store.put('derived_relations.jsonl',graph['call_targets']+graph['flow_edges'])
-    store.put('function_summaries.jsonl',[dict(function_id=f['id'],status='partial',flow_ids=[e['id'] for e in graph['flow_edges'] if e['owner']==f['id']],limitations=['no_CFG_fixed_point']) for f in graph['functions']])
+    if not native_tool:store.put('function_summaries.jsonl',[dict(function_id=f['id'],status='partial',flow_ids=[e['id'] for e in graph['flow_edges'] if e['owner']==f['id']],limitations=['no_CFG_fixed_point']) for f in graph['functions']])
     store.put('issues.json',graph['issues']);store.put('coverage.json',coverage)
     if not graph['functions'] and failed:raise RuntimeError('All selected function analysis failed; previous published snapshot retained')
     build_context=store.meta('current_build_context',{})
@@ -222,7 +236,7 @@ def analyze(args,store,roots):
     publish(store,graph,manifest)
     reviews=requests(graph,store,manifest['snapshot_id'])
     store.setmeta('inventory',now)
-    summary=dict(status='partial' if failed or any(i['kind']!='external_boundary' for i in graph['issues']) or pending else 'succeeded',snapshot_id=manifest['snapshot_id'],functions=len(graph['functions']),calls=len(graph['call_targets']),parsed=parsed,reused=reused,review_tasks=len(reviews),output=str(store.root/'snapshots'/manifest['snapshot_id']),run=str(store.run))
+    summary=dict(status='partial' if graph['dataflow_status'].get('status')=='partial' or failed or any(i['kind']!='external_boundary' for i in graph['issues']) or pending else 'succeeded',snapshot_id=manifest['snapshot_id'],functions=len(graph['functions']),calls=len(graph['call_targets']),parsed=parsed,reused=reused,review_tasks=len(reviews),output=str(store.root/'snapshots'/manifest['snapshot_id']),run=str(store.run))
     store.put('run_summary.json',summary)
     if args.html:
         from .viewer import export

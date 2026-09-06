@@ -5,7 +5,7 @@ description: Analyze C/C++ SDK repositories with Clang, generate evidence-backed
 
 # SDK Code Atlas
 
-Use the bundled launcher to analyze a local repository. The package is an executable **0.2 prototype**, not a claim that all v3.1 design capabilities are implemented. Read [current update](update/001_round1_changes.md) before reporting completeness; [v0.1 capabilities](update/000_v0.1_capabilities.md) is historical. Windows/Linux x64 runtimes are selected by the launcher; analysis of Linux SDKs should run on the Linux code host with its SDK headers and toolchain context.
+Use the bundled launcher to analyze a local repository. The package is an executable **0.3 prototype**, not a claim that all v3.1 design capabilities are implemented. Read [current update](update/002_round2_changes.md) before reporting completeness; [v0.1 capabilities](update/000_v0.1_capabilities.md) is historical. Windows/Linux x64 runtimes are selected by the launcher; analysis of Linux SDKs should run on the Linux code host with its SDK headers and toolchain context.
 
 ## Run
 
@@ -22,6 +22,14 @@ run --repo /path/to/repo --out /path/to/analysis --interface sdk_entry --html /p
 Omit `--interface` for repository scope. Use `--direction up` for caller discovery. Multiple definitions/overloads require choosing an ID returned by `trace`; do not silently choose one. Use repeated `--root` for additional source roots and repeated `--compdb` for independently configured superbuild children. CMake-provided business source/include paths are also discovered. Use `--child-cmake-root` for an existing independent child that needs configuration; inspect its required parameters first. Do not download/build ExternalProject dependencies automatically.
 
 The launchers never upload source or call a model. The host Agent performs configuration investigation and review through the file protocol. Existing parameters and authorization persist; ask only for genuinely unknown semantic inputs such as TOP_DIR. See [workflow](references/workflow.md) for commands, CMake failure recovery, review imports and incremental updates.
+
+## Optional scalar computation chains
+
+Use `run ... --dataflow cfg` when parameter/return computation is requested. This needs the separate `atlas-semantic` Clang 18 tool; the old v0.1 ZIP does not contain it. Check doctor and [round 2 setup and limits](update/002_round2_changes.md). Basic interface calls stay available with the default `--dataflow off`.
+
+Query `flow --out /analysis --function sdk_entry --parameter input` for forward use, or omit `--parameter` for backward return provenance. `--value ID --direction backward` selects an intermediate value. Follow `call_expansions` and its formal/actual bindings; never join different callers through a shared callee parameter. Fields, aliases and concrete-value path pruning are not implemented.
+
+Read dataflow_status, each summary's limitations/converged, native_parse_plan and dataflow_plan. A CFG being available does not prove every expression is supported. Control sources are conservative and distinct from value sources. Unknown memory, recursive value and budget limits must remain visible. Reuse the same output directory for CFG and summary checkpoints.
 
 ## Analysis invariants
 
@@ -40,8 +48,8 @@ The launchers never upload source or call a model. The host Agent performs confi
 
 ## Delivery
 
-Return the HTML and concise counts of parsed/reused/failed TUs, unresolved targets, truncation and remaining capabilities. Include original run logs only when needed for diagnosis. Do not report CFG, complete alias analysis, kernel registration rules, or universal cross-platform portability as implemented.
+Return the HTML and concise counts of parsed/reused/failed TUs, unresolved targets, truncation and remaining capabilities. Include original run logs only when needed for diagnosis. Report CFG and scalar flow only within the round 2 supported subset. Do not report complete alias analysis, kernel registration rules, or universal cross-platform portability as implemented.
 
-For development, run `selftest` through the launcher (requires a working C/C++ compiler for the fixture CMake project). Read [artifact mapping](references/artifacts.md) to locate intermediate files. The original detailed design is in [design-v3.1.md](references/design-v3.1.md); concrete prototype deviations are governed by capabilities.md.
+For development, run `selftest` through the launcher (requires a working C/C++ compiler for the fixture CMake project). Read [artifact mapping](references/artifacts.md) to locate intermediate files. The original detailed design is in [design-v3.1.md](references/design-v3.1.md); current prototype deviations are governed by the latest update document; capabilities.md describes the original prototype.
 
 A generated offline example is included at `examples/fixture-overview.html`. Open it directly to inspect the UI before analyzing your own project.

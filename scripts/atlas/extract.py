@@ -59,7 +59,7 @@ def extract(unit,roots,rules=None):
         if c.location.file and not inside(c):return
         kind=c.kind.name
         if kind in FUNCTIONS and c.is_definition() and inside(c):
-            identity=base(c);fid='f_'+digest([identity,c.type.spelling,' '.join(t.spelling for t in c.get_tokens()),unit['id']])[:24]
+            identity=base(c);fid='f_'+digest([identity,c.type.spelling,unit['id']])[:24]
             params=[]
             for i,p in enumerate(c.get_arguments() or []):
                 pid=var(p);params.append(dict(id=pid,name=p.spelling,type=p.type.spelling,index=i))
