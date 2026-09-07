@@ -1,6 +1,6 @@
 """Deterministic graph assembly; candidates never silently become exact."""
 from collections import defaultdict,deque
-from .core import digest
+from .infrastructure.store import digest
 
 def merge(results):
     by_kind=defaultdict(dict)

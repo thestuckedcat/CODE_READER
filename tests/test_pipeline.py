@@ -2,12 +2,13 @@
 import json,os,shutil,subprocess,tempfile,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+from support import source_cli
 class PipelineTest(unittest.TestCase):
  @classmethod
  def setUpClass(cls):
   cls.tmp=tempfile.TemporaryDirectory(prefix='atlas test ');cls.work=Path(cls.tmp.name)
   cls.repo=cls.work/'source';shutil.copytree(ROOT/'tests/fixture',cls.repo);cls.out=cls.work/'analysis'
-  cls.launch=['powershell','-NoProfile','-File',str(ROOT/'run.ps1')] if os.name=='nt' else ['bash',str(ROOT/'run.sh')]
+  cls.launch=source_cli()
   cls.base=['run','--repo',str(cls.repo),'--out',str(cls.out)]
  @classmethod
  def tearDownClass(cls):cls.tmp.cleanup()
@@ -19,8 +20,8 @@ class PipelineTest(unittest.TestCase):
   return r
  @classmethod
  def graph(cls):
-  c=json.loads((cls.out/'current.json').read_text());folder=cls.out/'snapshots'/c['snapshot_id']
-  return json.loads((folder/'graph.json').read_text())['payload'],json.loads((folder/'analysis_manifest.json').read_text())['payload']
+  c=json.loads((cls.out/'current.json').read_text(encoding='utf-8'));folder=cls.out/'snapshots'/c['snapshot_id']
+  return json.loads((folder/'graph.json').read_text(encoding='utf-8'))['payload'],json.loads((folder/'analysis_manifest.json').read_text(encoding='utf-8'))['payload']
  def test_01_calls_and_types(self):
   self.cli(*self.base);g,m=self.graph();fs={f['id']:f for f in g['functions']}
   edges={(fs[e['source']]['name'],fs[e['target']]['name']) for e in g['call_targets']}
@@ -44,7 +45,7 @@ class PipelineTest(unittest.TestCase):
   t=json.loads(r.stdout);self.assertEqual(len(t['first_divergence_choices']),2)
   self.cli('trace','--out',str(self.out),'--function','overload',ok=False)
   html=self.work/'offline'/'overview.html';self.cli('export','--out',str(self.out),'--html',str(html))
-  s=html.read_text();self.assertIn('application/json',s);self.assertNotIn('__ATLAS_DATA__',s)
+  s=html.read_text(encoding='utf-8');self.assertIn('application/json',s);self.assertNotIn('__ATLAS_DATA__',s)
   self.assertNotIn('src="http',s);self.assertNotIn('fetch(',s)
   self.cli('validate','--out',str(self.out))
  def test_04_invalid_review_and_valid_candidate(self):

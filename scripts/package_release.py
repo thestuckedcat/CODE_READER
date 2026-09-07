@@ -2,7 +2,7 @@
 """Build a portable distribution ZIP and SHA-256 runtime inventory."""
 import argparse,hashlib,json,zipfile
 from pathlib import Path
-from atlas.core import VERSION
+from atlas.domain.contracts import TOOL_VERSION as VERSION
 p=argparse.ArgumentParser();p.add_argument('--out',required=True);p.add_argument('--manifest-only',action='store_true');args=p.parse_args()
 root=Path(__file__).resolve().parents[1];out=Path(args.out).resolve()
 if out.is_relative_to(root):raise SystemExit('Put the release ZIP outside the skill folder')

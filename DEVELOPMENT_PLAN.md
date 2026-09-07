@@ -1,6 +1,6 @@
 # CODE_READER 开发计划与功能验收矩阵
 
-更新日期：2026-09-06。原始计划基线：SDK Code Atlas 0.1。第 1 轮 v0.2 的最新实现/验收状态见 [update/001_round1_changes.md](update/001_round1_changes.md)；第 2 轮 v0.3 的最新状态见 [update/002_round2_changes.md](update/002_round2_changes.md)：标量 CFG/覆盖赋值/直接调用摘要/阶段缓存已实现并验证，字段/别名/精确路径及异常语义仍未完成。其余初始状态保留作计划对照。
+更新日期：2026-09-08。原始计划基线：SDK Code Atlas 0.1。第 1 轮 v0.2 与第 2 轮 v0.3 的功能状态分别见 [update/001_round1_changes.md](update/001_round1_changes.md)、[update/002_round2_changes.md](update/002_round2_changes.md)；v0.4 分层重构、隔离运行时和工程修复见 [update/003_refactor_changes.md](update/003_refactor_changes.md)。字段/别名/精确路径及异常语义仍未完成。
 代码基线：[389ab62](https://github.com/thestuckedcat/CODE_READER/commit/389ab627736fecfddb792d800d69b88718133af5)；总体设计根目录补充：[d734720](https://github.com/thestuckedcat/CODE_READER/commit/d7347201f9317e8a26d436df72be22f34334ee46)。
 
 本文跟踪当前交付与后续六轮开发。每一轮是可独立验收的阶段，可拆成多个 PR；不是六次对话或承诺六个固定工期。当前基础原型记为第 0 轮，目前第 1 轮已完成限定范围技术验证，第 2 轮已交付标量子集；完整产品验收与后续阶段仍未完成。

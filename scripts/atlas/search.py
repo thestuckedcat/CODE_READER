@@ -1,7 +1,7 @@
 """Incremental candidate discovery. Tokens are hints; only Clang creates calls."""
 import os,re
 from pathlib import Path
-from .core import digest,filehash
+from .infrastructure.store import digest, filehash
 from .boundaries import classify
 
 

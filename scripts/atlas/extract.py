@@ -1,6 +1,6 @@
 """Clang C API extraction. No regex is used to establish a call target."""
 from pathlib import Path
-from .core import digest,filehash
+from .infrastructure.store import digest, filehash
 FUNCTIONS={'FUNCTION_DECL','CXX_METHOD','CONSTRUCTOR','DESTRUCTOR','CONVERSION_FUNCTION','FUNCTION_TEMPLATE'}
 TYPES={'STRUCT_DECL','CLASS_DECL','UNION_DECL','ENUM_DECL','TYPEDEF_DECL','TYPE_ALIAS_DECL'}
 BRANCHES={'IF_STMT','SWITCH_STMT','FOR_STMT','WHILE_STMT','DO_STMT','CONDITIONAL_OPERATOR'}

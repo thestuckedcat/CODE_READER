@@ -1,9 +1,12 @@
 """CMake evaluation and explicit compilation-context normalization."""
 import os, re, shlex, shutil, subprocess, sys
 from pathlib import Path
-from .core import digest,filehash,write,read
+from .infrastructure.store import digest, filehash, read, write
 EXT={'.c','.cc','.cpp','.cxx','.h','.hh','.hpp','.hxx','.in','.cmake','.inc','.def','.s','.S'}
 SKIP={'.git','.svn','node_modules','__pycache__','.venv'}
+def tool(name):
+    local=Path(sys.executable).parent/(name+'.exe' if os.name=='nt' else name)
+    return str(local) if local.is_file() else shutil.which(name)
 def inventory(roots,exclude):
     rows=[]
     for root in roots:
@@ -17,7 +20,8 @@ def inventory(roots,exclude):
 
 def doctor():
     checks={}
-    for x in ('cmake','ninja','git','cc','c++'): checks[x]=shutil.which(x)
+    for x in ('cmake','ninja'):checks[x]=tool(x)
+    for x in ('git','cc','c++'): checks[x]=shutil.which(x)
     try:
         from clang import cindex
         cindex.Index.create(); checks['libclang']='loaded'
@@ -93,9 +97,13 @@ def normalize(src,cwd,argv,args,output):
             if not token.startswith('@'):output.append(token);continue
             path=(cwd/token[1:]).resolve()
             if str(path) in active or len(active)>=8:raise ValueError('Cyclic/deep response file: '+str(path))
-            if os.name=='nt':raise ValueError('Windows response quoting not yet supported; provide expanded arguments')
             response_inputs[str(path)]=filehash(path)
-            output.extend(expand(shlex.split(path.read_text()),active+(str(path),)))
+            text=path.read_text(encoding='utf-8')
+            if os.name=='nt':
+                tokens=shlex.split(text,posix=False)
+                tokens=[token[1:-1] if len(token)>=2 and token[0]==token[-1] and token[0] in ('"', "'") else token for token in tokens]
+            else:tokens=shlex.split(text)
+            output.extend(expand(tokens,active+(str(path),)))
         return output
     argv=expand(argv)
     if Path(argv[0]).name in ('ccache','sccache'):argv=argv[1:]
@@ -114,6 +122,15 @@ def normalize(src,cwd,argv,args,output):
         result.append(a)
     resource=Path(__file__).resolve().parents[2]/'runtime/clang-resource'
     if resource.is_dir(): result+=['-resource-dir='+str(resource)]
+    elif os.name!='nt':
+        # PyPI libclang ships the shared library but not Clang builtin headers.
+        # Reuse the selected GCC-compatible toolchain's builtin include directory
+        # as explicit parse context instead of changing the host installation.
+        try:
+            probe=subprocess.run([compiler,'-print-file-name=include'],cwd=cwd,capture_output=True,text=True,timeout=10)
+            builtin=Path(probe.stdout.strip()).resolve()
+            if probe.returncode==0 and builtin.is_dir():result+=['-isystem',str(builtin)]
+        except (OSError,subprocess.SubprocessError):pass
     result+=args.clang_arg or []
     return dict(id=digest([str(src),str(cwd),result]),file=str(src),directory=str(cwd),arguments=result,
                 original_arguments=original,compiler=compiler,removed_nonsemantic_flags=removed,output=output,response_inputs=response_inputs)

@@ -1,15 +1,19 @@
-# CODE_READER · SDK Code Atlas 0.3
+# CODE_READER · SDK Code Atlas 0.4
 
 C/C++ Linux SDK 阅读工具的第一版 Skill 原型：CMake 求值 → Clang 语义提取 → Python 图分析与增量缓存 → 宿主 Agent 审阅 → 离线 HTML。
 
-当前源码为 v0.3；本轮新文档统一放在 [`update/`](update/)。原完整压缩包及 runtime 仍是 v0.1 交付，现有 runtime 可继续用于基础调用链；本轮新增 CFG 需另行构建 atlas-semantic，尚未重新制作完整离线包。
+当前源码为 v0.4：在保持 schema 0.1 和既有 CLI 兼容的前提下完成第一轮分层重构，并新增仓库内隔离运行时、跨平台测试入口、功能级复现档案与文档反合检查。旧 v0.1 离线包仍可用于历史基础调用链，但不包含 v0.3 引入的原生 CFG 工具。
 
 ## 从哪里开始
 
 - 开发计划与验收矩阵：[DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)
+- 分层架构与依赖规则：[ARCHITECTURE.md](ARCHITECTURE.md)
+- 可复现功能目录：[do_func/README.md](do_func/README.md)
+- Workflow/checkpoint 待确认方案：[references/workflow-checkpoints.md](references/workflow-checkpoints.md)
 - 首版能力快照：[update/000_v0.1_capabilities.md](update/000_v0.1_capabilities.md)
 - 第一轮工程接入：[update/001_round1_changes.md](update/001_round1_changes.md)
 - 本轮 CFG/参数计算链及验证：[update/002_round2_changes.md](update/002_round2_changes.md)
+- v0.4 分层重构与工程修复：[update/003_refactor_changes.md](update/003_refactor_changes.md)
 - Skill 入口：[SKILL.md](SKILL.md)
 - 当前可用能力及限制：[references/capabilities.md](references/capabilities.md)
 - 操作说明：[references/workflow.md](references/workflow.md)
@@ -18,9 +22,27 @@ C/C++ Linux SDK 阅读工具的第一版 Skill 原型：CMake 求值 → Clang �
 - 测试报告：[TEST_REPORT.md](TEST_REPORT.md)
 - 示例：下载 [examples/fixture-overview.html](examples/fixture-overview.html) 后用浏览器打开。
 
-## 仓库与离线压缩包
+## 隔离环境与运行
 
-本仓库保存 Skill、Python 源码、查看器、文档和测试，不提交第三方运行时二进制。
+本仓库保存 Skill、Python/C++ 源码、查看器、文档和测试，不提交第三方运行时二进制。依赖安装严格位于本 Skill 的 `runtime/<platform>/`：
+
+这里的“依赖”指 Skill 管理的 Python、CMake、Ninja、libclang 和 DOM 测试依赖；目标 SDK 的编译器、系统头文件和 sysroot 属于分析输入，安装器不会修改或伪造它们。
+
+```powershell
+.\setup.ps1
+.\run.ps1 doctor
+.\test-platform.ps1
+```
+
+```bash
+./setup.sh
+./run.sh doctor
+./test-platform.sh
+```
+
+测试源码和发布包解耦，开发测试不再强制要求旧离线 ZIP。`--wheelhouse <目录>` 可离线安装 Python 依赖；完全离线安装还需预置对应平台的 `runtime/<platform>/node`。
+
+## 历史离线压缩包
 
 已经交付的完整包 `sdk-code-atlas-0.1.0.zip` 包含 Windows/Linux x64 Python、libclang、CMake、Ninja 和 Clang 内建头文件。它不是本仓库自动生成的 GitHub Source code ZIP，也尚未上传为 GitHub Release 附件。
 
@@ -36,18 +58,13 @@ bash run.sh run --repo /path/to/sdk --out /path/to/cache \
 bash run.sh selftest
 ```
 
-Windows 完整包使用 `run.ps1`。Windows 分支尚未在 Windows 主机实测；推荐在代码所在 Linux 云主机执行分析。
+Windows 和 Linux 均使用平台隔离运行时；分析 Linux SDK 时仍应在具有对应目标头文件与工具链的 Linux 主机执行。
 
-## 仅从源码运行
-
-需要 Python 3.12、项目编译环境及目标头文件。建议在独立 Python 虚拟环境中安装：
+## 分析命令
 
 ```bash
-python -m pip install -r requirements.txt
-python scripts/sdk_atlas.py doctor
-python scripts/sdk_atlas.py run --repo /path/to/sdk --out /path/to/cache \
+./run.sh run --repo /path/to/sdk --out /path/to/cache \
   --compdb /path/to/build/compile_commands.json \
-  --clang-arg=-resource-dir=/path/to/llvm/lib/clang/18 \
   --interface sdk_entry --html /path/to/output/overview.html
 ```
 
@@ -57,6 +74,6 @@ python scripts/sdk_atlas.py run --repo /path/to/sdk --out /path/to/cache \
 
 ## 验证与限制
 
-7 组真实 Clang/CMake 回归测试通过；llama.cpp 固定版本完成有预算的接口分析。调用目标保留 exact/may 和源码证据，解析失败的 TU 不沿用旧事实。
+功能级测试及本轮实际平台结果见 [TEST_REPORT.md](TEST_REPORT.md)。调用目标保留 exact/may 和源码证据，解析失败的 TU 不沿用旧事实。
 
-当前使用 libclang Python bindings，不是专用 C++ LibTooling 提取器。完整 CFG、别名固定点、内核专用生命周期规则尚未实现，字段流为部分实现。模型审阅由宿主 Agent 提供；脚本不内置模型或上传源码。
+基础语义使用 libclang Python bindings；可选的 `atlas-semantic` 使用 Clang C++ API 提取 CFG。字段敏感别名、指针副作用、内核专用生命周期规则和正式 VS Code 扩展仍未实现。模型审阅由宿主 Agent 提供；脚本不内置模型或上传源码。

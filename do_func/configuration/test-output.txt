@@ -1,0 +1,2 @@
+2026-09-08 Windows x64 and Linux x86_64:
+test_explicit_parameters_and_assumptions ... ok

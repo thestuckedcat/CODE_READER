@@ -2,10 +2,11 @@
 import json,os,shutil,subprocess,tempfile,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+from support import source_cli
 class RoundOne(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory(prefix='atlas round1 ');self.work=Path(self.tmp.name);self.repo=self.work/'repo';self.repo.mkdir();self.out=self.work/'analysis'
-  self.launch=['powershell','-NoProfile','-File',str(ROOT/'run.ps1')] if os.name=='nt' else ['bash',str(ROOT/'run.sh')]
+  self.launch=source_cli()
  def tearDown(self):self.tmp.cleanup()
  def put(self,p,text):
   path=self.repo/p;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(text);return path
@@ -16,12 +17,12 @@ class RoundOne(unittest.TestCase):
   return r
  def run_repo(self,*args,ok=True):return self.cli('run','--repo',str(self.repo),'--out',str(self.out),*args,ok=ok)
  def graph(self):
-  c=json.loads((self.out/'current.json').read_text());folder=self.out/'snapshots'/c['snapshot_id'];return json.loads((folder/'graph.json').read_text())['payload']
+  c=json.loads((self.out/'current.json').read_text(encoding='utf-8'));folder=self.out/'snapshots'/c['snapshot_id'];return json.loads((folder/'graph.json').read_text(encoding='utf-8'))['payload']
  def artifacts(self,name):
   results=[]
   for run in sorted((self.out/'runs').iterdir(),key=lambda p:p.stat().st_mtime):
-   for e in json.loads((run/'artifacts.json').read_text())['payload']['entries']:
-    if e['logical_name']==name:results.append(json.loads((self.out/e['relative_path']).read_text())['payload'])
+   for e in json.loads((run/'artifacts.json').read_text(encoding='utf-8'))['payload']['entries']:
+    if e['logical_name']==name:results.append(json.loads((self.out/e['relative_path']).read_text(encoding='utf-8'))['payload'])
   return results
  def simple(self,sources):
   self.put('CMakeLists.txt','cmake_minimum_required(VERSION 3.16)\nproject(test C)\nadd_library(sdk STATIC '+sources+')\n')
@@ -92,7 +93,7 @@ ExternalProject_Add(child SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/child" DOWNLOA
   self.assertEqual(g['coverage']['processed_units'],1);self.assertEqual(g['boundaries'][0]['kind'],'linux')
  def test_cross_repository_header_dependency_and_exact_target(self):
   other=self.work/'dep';other.mkdir();(other/'dep.c').write_text('#include "dep.h"\nint dep(int x){return x+OFFSET;}\n');(other/'dep.h').write_text('#define OFFSET 1\nint dep(int);\n')
-  self.put('CMakeLists.txt','cmake_minimum_required(VERSION 3.16)\nproject(cross C)\nadd_library(sdk STATIC api.c "'+str(other/'dep.c')+'")\ntarget_include_directories(sdk PRIVATE "'+str(other)+'")\nadd_library(sdk_extra STATIC extra.c)\n')
+  self.put('CMakeLists.txt','cmake_minimum_required(VERSION 3.16)\nproject(cross C)\nadd_library(sdk STATIC api.c "'+(other/'dep.c').as_posix()+'")\ntarget_include_directories(sdk PRIVATE "'+other.as_posix()+'")\nadd_library(sdk_extra STATIC extra.c)\n')
   self.put('api.c','#include "dep.h"\nint entry(int x){return dep(x);}\n');self.put('extra.c','int extra(void){return 8;}\n')
   self.run_repo('--target','sdk','--interface','entry');g=self.graph();self.assertEqual({f['name'] for f in g['functions']},{'entry','dep'})
   self.assertEqual(g['coverage']['total_available_units'],2)

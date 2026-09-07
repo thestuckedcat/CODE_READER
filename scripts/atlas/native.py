@@ -1,7 +1,7 @@
 """Optional native CFG stage, isolated from the reusable libclang facts cache."""
 import os, platform, shutil, subprocess, re
 from pathlib import Path
-from .core import digest, filehash, read, write
+from .infrastructure.store import digest, filehash, read, write
 
 
 def executable(explicit=None):

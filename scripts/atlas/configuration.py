@@ -1,7 +1,7 @@
 """CMake is the evaluator. This module records inputs and routes missing context."""
 import os,re,shutil,subprocess
 from pathlib import Path
-from .core import read,digest,filehash
+from .infrastructure.store import digest, filehash, read
 
 
 def discover(repo,rows,explicit=None):
@@ -78,9 +78,10 @@ def evaluate(entry,values,args,store,discovery,label='main'):
     build.mkdir(parents=True,exist_ok=True)
     cachekey='configure:'+digest([str(entry),values]);previous=store.meta(cachekey,{})
     env={k:os.environ.get(k) for k in ('CC','CXX','CFLAGS','CXXFLAGS','LDFLAGS','PATH','CMAKE_PREFIX_PATH','CPATH','C_INCLUDE_PATH','CPLUS_INCLUDE_PATH')}
-    tool=shutil.which('cmake')
-    if not tool:raise RuntimeError('CMake missing; provide evaluated --compdb or install the bundled runtime')
-    fingerprint=digest([env,filehash(tool),filehash(Path(__file__))])
+    from .build import tool as resolve_tool
+    cmake=resolve_tool('cmake')
+    if not cmake:raise RuntimeError('CMake missing; provide evaluated --compdb or install the bundled runtime')
+    fingerprint=digest([env,filehash(cmake),filehash(Path(__file__))])
     tree_names=sorted(str(p) for p in entry.rglob('CMakeLists.txt') if not p.is_relative_to(store.root))
     # Also watch files for GLOB source discovery, even if no existing dependency points to a new file.
     source_names=[]
@@ -94,10 +95,10 @@ def evaluate(entry,values,args,store,discovery,label='main'):
     query=build/'.cmake/api/v1/query';query.mkdir(parents=True,exist_ok=True)
     for name in ('codemodel-v2','cmakeFiles-v1'):(query/name).touch()
     trace=store.run/(label+'.cmake-trace.jsonl')
-    argv=[tool,'-S',str(entry),'-B',str(build),'-DCMAKE_EXPORT_COMPILE_COMMANDS=ON','--warn-uninitialized','--trace-expand','--trace-format=json-v1','--trace-redirect='+str(trace)]
+    argv=[cmake,'-S',str(entry),'-B',str(build),'-DCMAKE_EXPORT_COMPILE_COMMANDS=ON','--warn-uninitialized','--trace-expand','--trace-format=json-v1','--trace-redirect='+str(trace)]
     cache=build/'CMakeCache.txt'
     prior=re.search(r'^CMAKE_GENERATOR:INTERNAL=(.+)$',cache.read_text(errors='replace'),re.M) if cache.exists() else None
-    generator=prior.group(1) if prior else 'Ninja' if shutil.which('ninja') else 'Unix Makefiles' if os.name!='nt' else None
+    generator=prior.group(1) if prior else 'Ninja' if resolve_tool('ninja') else 'Unix Makefiles' if os.name!='nt' else None
     if not generator:raise RuntimeError('Ninja required for compilation database generation on Windows')
     argv+=['-G',generator]+['-D'+k+'='+('ON' if v is True else 'OFF' if v is False else str(v)) for k,v in sorted(values.items())]
     store.put('configure_request.json',dict(argv=argv,cwd=str(entry),label=label))

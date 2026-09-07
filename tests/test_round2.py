@@ -3,6 +3,7 @@ import json,os,shutil,subprocess,tempfile,unittest,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
+from support import source_cli
 from atlas.native import executable
 from atlas.pipeline import load_snapshot
 from atlas.dataflow import trace
@@ -12,7 +13,7 @@ class RoundTwo(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory(prefix='atlas round2 ');self.work=Path(self.tmp.name)
   self.repo=self.work/'repo';self.repo.mkdir();self.out=self.work/'analysis'
-  self.launch=['bash',str(ROOT/'run.sh')]
+  self.launch=source_cli()
  def tearDown(self):self.tmp.cleanup()
  def put(self,name,text):(self.repo/name).write_text(text)
  def setup(self,code,other=None,cpp=False):
@@ -76,9 +77,9 @@ class RoundTwo(unittest.TestCase):
   self.assertEqual(logical(updated),logical(fresh))
   self.assertEqual(self.deps(updated,'unrelated'),[0])
   run=max((self.out/'runs').iterdir(),key=lambda p:p.stat().st_mtime)
-  entries=json.loads((run/'artifacts.json').read_text())['payload']['entries']
+  entries=json.loads((run/'artifacts.json').read_text(encoding='utf-8'))['payload']['entries']
   e=next(e for e in entries if e['logical_name']=='dataflow_plan.json')
-  plan=json.loads((self.out/e['relative_path']).read_text())['payload']
+  plan=json.loads((self.out/e['relative_path']).read_text(encoding='utf-8'))['payload']
   by={(p['function_id'],p['stage']):p['action'] for p in plan}
   self.assertEqual(by[self.fn(updated,'unrelated')['id'],'return_summary'],'reuse')
   self.assertEqual(by[self.fn(updated,'top')['id'],'return_summary'],'solve')
@@ -111,4 +112,4 @@ class RoundTwo(unittest.TestCase):
   html=self.work/'view.html';g=self.run_repo('--html',str(html))
   r=subprocess.run(self.launch+['flow','--out',str(self.out),'--function','simple'],capture_output=True,text=True)
   self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(json.loads(r.stdout)['direction'],'backward')
-  self.assertIn('value_nodes',html.read_text());self.assertIn('参数计算链',html.read_text())
+  self.assertIn('value_nodes',html.read_text(encoding='utf-8'));self.assertIn('参数计算链',html.read_text(encoding='utf-8'))

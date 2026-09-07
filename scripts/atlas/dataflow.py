@@ -5,7 +5,7 @@ no SAT feasibility, alias, overflow or loop-termination proof is claimed.
 """
 from collections import defaultdict, deque
 from copy import deepcopy
-from .core import digest, filehash
+from .infrastructure.store import digest, filehash
 
 
 def symbol(usr):
