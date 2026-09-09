@@ -16,6 +16,7 @@
 | 10 | 打包 | [10-packaging](10-packaging/README.md) |
 | 11 | 锁与共享状态并行性 | [11-lock-analysis](11-lock-analysis/README.md) |
 | 12 | 字段别名、锁所有权与回调候选 | [12-field-alias-analysis](12-field-alias-analysis/README.md) |
+| 13 | 多目标嵌套字段、回调状态与锁包装函数 | [13-advanced-alias-concurrency](13-advanced-alias-concurrency/README.md) |
 
 使用隔离运行时执行单项测试：
 

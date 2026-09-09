@@ -1,7 +1,7 @@
-# SDK Code Atlas 0.6 validation report
+# SDK Code Atlas 0.7 validation report
 
 Date: 2026-09-10. Source under test includes the layered architecture,
-repository-local runtime, lexical locksets and bounded field/alias analysis. Runtime payloads are ignored by Git.
+repository-local runtime, bounded field/alias analysis, callback state and simple lock-wrapper projection. Runtime payloads are ignored by Git.
 
 ## Windows x64
 
@@ -12,7 +12,7 @@ repository-local runtime, lexical locksets and bounded field/alias analysis. Run
 - Viewer dependency: linkedom 0.18.12 below the same platform runtime; a pinned,
   integrity-checked npm CLI was bootstrapped locally because the host exposed
   Node without npm.
-- Result: `doctor_exit=0`, 24 architecture/basic behavioral tests passed,
+- Result: `doctor_exit=0`, 25 architecture/basic behavioral tests passed,
   14 native CFG tests skipped, 0 failed; viewer DOM test passed; platform
   status `passed`.
 
@@ -79,7 +79,23 @@ preserved in `update/002_round2_changes.md`.
   skipped, 0 failed; Viewer field/callback/lock interaction passed.
 - A first failed attempt exposed test-state leakage and pointer-symbol/object
   conflation. Both were corrected before the recorded full pass.
-- Scope is limited to one-level fields, finite address/copy/argument propagation,
-  lock ownership summaries and callback registration candidates.
+- This v0.6 regression scope remains limited to one-level fields, finite
+  address/copy/argument propagation, lock ownership summaries and callback
+  registration candidates; v0.7 extensions are covered below.
+
+## Advanced alias/concurrency feature test
+
+- Command: `runtime/windows-x86_64/venv/Scripts/python.exe scripts/run_feature_test.py advanced-alias-concurrency`.
+- Focused Windows result after final document reconciliation: 1 passed in 9.949 seconds.
+- Focused Linux/WSL result: 1 passed in 66.386 seconds using the repository-local
+  runtime after dependency synchronization through `setup.sh`.
+- Full Windows platform suite: 39 discovered, 25 passed, 14 native CFG tests
+  skipped, 0 failed; Viewer nested-field/callback-state/wrapper-lock interaction passed.
+- Covered: conservative two-object alias set, nested `pair.left` path,
+  same-function callback set then clear, and acquire/release wrapper projection
+  onto the caller's shared-state access.
+- Scope does not include branch feasibility, arrays/pointer arithmetic, callback
+  lifecycle across functions, recursive/conditional lock wrappers or runtime
+  thread reachability.
 
 Per-feature commands and captured minimum outputs are under [do_func](do_func/README.md).

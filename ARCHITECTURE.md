@@ -17,7 +17,7 @@ infrastructure (artifact store, CMake, Clang, native process) implements
 technical capabilities consumed by application modules. Domain never imports it.
 ```
 
-The current 0.6 architecture establishes enforceable boundaries for new work while
+The current 0.7 architecture establishes enforceable boundaries for new work while
 retaining the mature analysis modules as transitional components:
 
 | Layer | Stable modules | Transitional modules |

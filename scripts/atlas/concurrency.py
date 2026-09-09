@@ -7,6 +7,9 @@ from .infrastructure.store import digest
 
 def summarize(objects,events,regions,accesses):
     lock_ids={lock for event in events for lock in event['lock_ids']}
+    # Passing a synchronization object into a lock wrapper is an operation on
+    # the lock itself, not an application shared-state access.
+    accesses=[access for access in accesses if access['object_id'] not in lock_ids]
     locks=[]
     for lock_id in sorted(lock_ids):
         obj=objects.get(lock_id,{})

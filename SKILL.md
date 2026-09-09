@@ -5,7 +5,7 @@ description: Analyze C/C++ SDK repositories with evaluated CMake/Clang evidence,
 
 # SDK Code Atlas
 
-Use the repository-local launcher. Version **0.6.0** establishes layered
+Use the repository-local launcher. Version **0.7.0** establishes layered
 application/domain/infrastructure/interface boundaries while preserving schema
 0.1 compatibility. It is a prototype; do not generalize fixture evidence to
 unsupported C/C++ semantics.
@@ -47,10 +47,12 @@ or incremental update is needed.
   `potential_race` is a conservative warning and does not prove runtime thread
   overlap or a complete happens-before relation. Query it with `locks --out`.
 - Field/alias analysis resolves bounded `&object -> pointer -> pointer-copy`
-  chains, one-level field paths, argument-to-parameter objects, lock ownership
-  summaries, and callback-field candidates. Query it with `aliases --out`.
-  Treat casts, arrays, pointer arithmetic, multiple targets, and caller critical
-  region expansion as `may/unknown`; see the numbered capability brief.
+  chains, conservative multi-target sets, nested member paths and
+  argument-to-parameter objects. It records same-function callback set/clear
+  state and projects simple lock wrappers into caller critical regions. Query it
+  with `aliases --out`. Treat casts, arrays, pointer arithmetic, branch
+  feasibility, cross-function callback lifecycle and complex lock wrappers as
+  `may/unknown`; see the numbered capability brief.
 
 ## Delivery and maintenance
 

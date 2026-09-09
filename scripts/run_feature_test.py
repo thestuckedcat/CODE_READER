@@ -19,6 +19,7 @@ FEATURES = {
     "packaging": ["test_architecture.ArchitectureTest.test_document_reconciliation"],
     "lock-analysis": ["test_pipeline.PipelineTest.test_08_lock_and_shared_state_parallelism"],
     "field-alias-analysis": ["test_pipeline.PipelineTest.test_09_field_alias_argument_and_callback_candidates"],
+    "advanced-alias-concurrency": ["test_pipeline.PipelineTest.test_10_multi_alias_nested_callback_lifecycle_and_wrapper_lock"],
 }
 
 

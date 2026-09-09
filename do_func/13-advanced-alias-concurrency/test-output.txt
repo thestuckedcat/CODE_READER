@@ -1,0 +1,6 @@
+test_10_multi_alias_nested_callback_lifecycle_and_wrapper_lock (test_pipeline.PipelineTest.test_10_multi_alias_nested_callback_lifecycle_and_wrapper_lock) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 9.949s
+
+OK

@@ -197,12 +197,20 @@ def extract(unit,roots,rules=None):
                 put('alias_relation',declaration,id='alias_'+digest([owner,anchor(declaration),var(declaration),sources])[:24],owner=owner,
                     target_symbol=var(declaration),source_symbols=sources,relation='address_of' if direct else 'pointer_copy',
                     certainty='exact' if len(sources)==1 else 'may',limitations=['flow_insensitive_within_function'])
-        for member in (node for node in nodes if node.kind.name=='MEMBER_REF_EXPR' and node.referenced and node.referenced.kind.name=='FIELD_DECL'):
-            bases=variables(member);field=member.referenced;offset=member.extent.start.offset
+        members=[node for node in nodes if node.kind.name=='MEMBER_REF_EXPR' and node.referenced and node.referenced.kind.name=='FIELD_DECL']
+        nested_members={(child.extent.start.offset,child.extent.end.offset,base(child.referenced)) for member in members for child in member.get_children()
+                        if child.kind.name=='MEMBER_REF_EXPR' and child.referenced and child.referenced.kind.name=='FIELD_DECL'}
+        def member_path(member):
+            child=next((node for node in member.get_children() if node.kind.name=='MEMBER_REF_EXPR' and node.referenced and node.referenced.kind.name=='FIELD_DECL'),None)
+            return (member_path(child) if child else [])+[member.referenced.spelling]
+        for member in members:
+            field=member.referenced;identity=(member.extent.start.offset,member.extent.end.offset,base(field))
+            if identity in nested_members:continue
+            bases=variables(member);offset=member.extent.start.offset;path=member_path(member)
             access='write' if any(start<=offset<=end for start,end in write_ranges) else 'read'
             put('field_access_seed',member,id='field_seed_'+digest([owner,anchor(member),base(field),sorted(bases),access])[:24],owner=owner,
-                base_symbols=sorted(bases),field_id=base(field),field_name=field.spelling,access=access,
-                expression=raw(member),certainty='may',limitations=['single_level_field_path'])
+                base_symbols=sorted(bases),field_id=base(field),field_name=field.spelling,field_path=path,access=access,
+                expression=raw(member),certainty='may',limitations=[])
     def flow(c,owner,destination,expression,kind,guards):
         rid='flow_'+digest([owner,anchor(c),destination,kind])[:24]
         inputs=refs(expression)

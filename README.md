@@ -1,8 +1,8 @@
-# CODE_READER · SDK Code Atlas 0.6
+# CODE_READER · SDK Code Atlas 0.7
 
 C/C++ Linux SDK 阅读工具的第一版 Skill 原型：CMake 求值 → Clang 语义提取 → Python 图分析与增量缓存 → 宿主 Agent 审阅 → 离线 HTML。
 
-当前源码 v0.6：在锁分析基础上新增单层字段路径、受限指针别名、实参到形参对象传播、锁所有权摘要和回调字段候选；文档反合检查覆盖全部 Markdown。旧 v0.1 离线包不包含这些后续能力。
+当前源码 v0.7：在有限别名基础上新增多目标对象集合、嵌套字段路径、同函数回调覆盖/清除状态，以及简单锁包装函数向调用方临界区的投影；文档反合检查覆盖全部 Markdown。旧 v0.1 离线包不包含这些后续能力。
 
 ## 从哪里开始
 
@@ -16,6 +16,7 @@ C/C++ Linux SDK 阅读工具的第一版 Skill 原型：CMake 求值 → Clang �
 - v0.4 分层重构与工程修复：[update/003_refactor_changes.md](update/003_refactor_changes.md)
 - v0.5 锁与共享状态分析：[do_func/11-lock-analysis/README.md](do_func/11-lock-analysis/README.md)
 - v0.6 字段别名与回调候选：[do_func/12-field-alias-analysis/README.md](do_func/12-field-alias-analysis/README.md)
+- v0.7 高级别名与并发分析：[do_func/13-advanced-alias-concurrency/README.md](do_func/13-advanced-alias-concurrency/README.md)
 - Skill 入口：[SKILL.md](SKILL.md)
 - 当前可用能力及限制：[references/capabilities.md](references/capabilities.md)
 - 操作说明：[references/workflow.md](references/workflow.md)
@@ -85,4 +86,4 @@ Windows 和 Linux 均使用平台隔离运行时；分析 Linux SDK 时仍应在
 
 功能级测试及本轮实际平台结果见 [TEST_REPORT.md](TEST_REPORT.md)。调用目标保留 exact/may 和源码证据，解析失败的 TU 不沿用旧事实。
 
-基础语义使用 libclang Python bindings；可选的 `atlas-semantic` 使用 Clang C++ API 提取 CFG。锁分析只证明源码位置上的共同词法锁；字段别名仅覆盖已记录的单层、有限传播。线程重叠、完整 happens-before、任意指针副作用、条件变量、内核专用生命周期规则和正式 VS Code 扩展仍未实现。
+基础语义使用 libclang Python bindings；可选的 `atlas-semantic` 使用 Clang C++ API 提取 CFG。锁分析只证明源码位置上的共同锁，包括无分支简单包装函数的调用点投影；字段别名覆盖有限传播、保守多目标集合和嵌套成员路径。同函数回调赋值可按源码顺序形成状态，跨函数/路径可行生命周期、线程重叠、完整 happens-before、任意指针副作用、条件变量、内核专用规则和正式 VS Code 扩展仍未实现。

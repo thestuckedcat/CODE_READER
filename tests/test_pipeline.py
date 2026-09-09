@@ -108,4 +108,20 @@ class PipelineTest(unittest.TestCase):
   self.assertEqual(ownership['acquired_lock_ids'],[gate['id']]);self.assertEqual(ownership['released_lock_ids'],[gate['id']])
   result=json.loads(self.cli('aliases','--out',str(self.out),'--object','shared_pair').stdout)
   self.assertTrue(result['field_accesses']);self.assertTrue(all(pair['id'] in row['object_ids'] for row in result['field_accesses']))
+ def test_10_multi_alias_nested_callback_lifecycle_and_wrapper_lock(self):
+  self.cli(*self.base);g,_=self.graph();functions={row['id']:row for row in g['functions']};objects={row['name']:row for row in g['objects']}
+  nested=next(row for row in g['field_accesses'] if functions[row['owner']]['name']=='multi_nested_write' and row['field_path']==['pair','left'])
+  self.assertEqual(set(nested['object_ids']),{objects['nested_a']['id'],objects['nested_b']['id']});self.assertEqual(nested['certainty'],'may')
+  self.assertEqual(set(nested['access_paths']),{'nested_a.pair.left','nested_b.pair.left'})
+  lifecycle=next(row for row in g['callback_states'] if functions[row['owner']]['name']=='callback_lifecycle')
+  events=[row for row in g['callback_targets'] if row['owner']==lifecycle['owner']]
+  self.assertEqual(lifecycle['status'],'cleared');self.assertEqual([row['action'] for row in events],['set','clear'])
+  self.assertEqual(events[1]['supersedes_event_id'],events[0]['id'])
+  wrapper=next(fid for fid,row in functions.items() if row['name']=='wrapper_locked_write');gate=objects['shared_gate']['id'];counter=objects['shared_counter']['id']
+  projected=[row for row in g['lock_events'] if row['owner']==wrapper and row.get('propagated_from')]
+  self.assertEqual([row['action'] for row in projected],['acquire','release'])
+  access=next(row for row in g['shared_accesses'] if row['owner']==wrapper and row['object_id']==counter)
+  self.assertIn(gate,access['held_lock_ids'])
+  result=json.loads(self.cli('aliases','--out',str(self.out),'--function','multi_nested_write').stdout)
+  self.assertEqual(result['field_accesses'][0]['certainty'],'may')
 if __name__=='__main__':unittest.main(verbosity=2)

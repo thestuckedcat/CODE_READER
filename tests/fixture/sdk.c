@@ -33,6 +33,13 @@ static void parameter_locked_write(AtlasMutex *mutex, int value) {
     atlas_mutex_unlock(mutex);
 }
 void call_parameter_locked_write(int value) { parameter_locked_write(&shared_gate, value); }
+static void wrapper_acquire(AtlasMutex *mutex) { atlas_mutex_lock(mutex); }
+static void wrapper_release(AtlasMutex *mutex) { atlas_mutex_unlock(mutex); }
+void wrapper_locked_write(int value) {
+    wrapper_acquire(&shared_gate);
+    shared_counter = value;
+    wrapper_release(&shared_gate);
+}
 
 struct SharedPair { int left; int right; };
 static struct SharedPair shared_pair = {0, 0};
@@ -45,3 +52,17 @@ static void set_pair_left(struct SharedPair *pair, int value) { pair->left = val
 void alias_argument_write(int value) { set_pair_left(&shared_pair, value); }
 int direct_right_read(void) { return shared_pair.right; }
 void install_callback(void) { register_callback(leaf); }
+void callback_lifecycle(void) {
+    settings.submit = leaf;
+    settings.submit = 0;
+}
+
+struct NestedState { struct SharedPair pair; };
+static struct NestedState nested_a = {{0, 0}};
+static struct NestedState nested_b = {{0, 0}};
+void multi_nested_write(int choose_first, int value) {
+    struct NestedState *selected;
+    if (choose_first) selected = &nested_a;
+    else selected = &nested_b;
+    selected->pair.left = value;
+}
