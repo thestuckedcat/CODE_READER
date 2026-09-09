@@ -1,6 +1,6 @@
 # CODE_READER 开发计划与功能验收矩阵
 
-更新日期：2026-09-08。原始计划基线：SDK Code Atlas 0.1。第 1 轮 v0.2 与第 2 轮 v0.3 的功能状态分别见 [update/001_round1_changes.md](update/001_round1_changes.md)、[update/002_round2_changes.md](update/002_round2_changes.md)；v0.4 分层重构、隔离运行时和工程修复见 [update/003_refactor_changes.md](update/003_refactor_changes.md)。字段/别名/精确路径及异常语义仍未完成。
+更新日期：2026-09-09。当前版本 SDK Code Atlas 0.5。第 1 轮 v0.2 与第 2 轮 v0.3 的功能状态分别见 [update/001_round1_changes.md](update/001_round1_changes.md)、[update/002_round2_changes.md](update/002_round2_changes.md)；v0.4 分层重构见 [update/003_refactor_changes.md](update/003_refactor_changes.md)。v0.5 已完成锁事件、词法临界区与共享状态保守冲突分析；字段别名、线程可达性、完整 happens-before、精确路径及异常语义仍未完成。
 代码基线：[389ab62](https://github.com/thestuckedcat/CODE_READER/commit/389ab627736fecfddb792d800d69b88718133af5)；总体设计根目录补充：[d734720](https://github.com/thestuckedcat/CODE_READER/commit/d7347201f9317e8a26d436df72be22f34334ee46)。
 
 本文跟踪当前交付与后续六轮开发。每一轮是可独立验收的阶段，可拆成多个 PR；不是六次对话或承诺六个固定工期。当前基础原型记为第 0 轮，目前第 1 轮已完成限定范围技术验证，第 2 轮已交付标量子集；完整产品验收与后续阶段仍未完成。
@@ -26,7 +26,7 @@
 | ID | 本轮功能及支持范围 | 是否完成 / 当前状态 | 验证方法 | 预期结果 | 已有实际结果 / 限制 |
 |---|---|---|---|---|---|
 | R0-01 | Skill、Python CLI、Linux x64 包内依赖启动 | 是，限定 Linux 测试环境 | 完整 ZIP 解压到另一含空格路径，执行 `bash run.sh doctor` | 加载包内 Python/libclang/CMake/Ninja，不依赖原打包绝对路径 | 通过；不代表任意 Linux 发行版/架构均支持 |
-| R0-02 | Windows x64 运行时与启动器 | 否，已实现待验证 | 在 Windows x64 无预装 Python 环境运行 doctor、fixture 和 export | 正常启动、解析和导出，错误有明确提示 | 仅组装依赖、静态检查路径；未进行 Windows 实测 |
+| R0-02 | Windows x64 运行时与启动器 | 是，限定当前测试环境 | 在 Windows x64 隔离运行时执行 doctor、完整 fixture、export 与 DOM 测试 | 正常启动、解析和导出，错误有明确提示 | 2026-09-08/09 实测通过；不代表所有 Windows 版本或无编译器主机 |
 | R0-03 | CMake 求值及显式参数输入 | 部分完成 | fixture 配置；llama.cpp 显式配置；核对 compdb 和 build_context | 使用 CMake 的 include、宏和命令；配置失败停止并保留日志 | 简单项目及 llama.cpp 已运行；复杂 superbuild 的自动调查/闭环待第 1 轮 |
 | R0-04 | 多源码根、多个编译数据库入口 | 部分完成 | 构造主仓调用依赖仓函数、两个独立子构建的样例 | 跨仓声明与定义正确关联，各自编译上下文保留 | 已有重复 `--root/--compdb` 接口；完整跨仓专项验收未完成 |
 | R0-05 | 函数、类型、字段、静态/全局对象及直接调用提取 | 是，限定 fixture / 已解析 TU | `test_01_calls_and_types`；检查 Clang 证据 | sdk_entry→leaf、alternate→leaf 正确；Config 字段存在；settings 为静态对象 | 通过；未保证所有 C++ 语法与配置变体 |
@@ -97,6 +97,7 @@
 | R3-05 | 问题分组、Subagent 补充及配置重解析闭环 | 部分完成 | 同槽位多个调用点、矛盾提案、缺配置提案、无新证据重试 | 按共同原因去重；事实不可被模型覆盖；配置修正回到 Clang；无进展停止 |
 | R3-06 | 函数功能简介与黑盒契约 | 部分完成，仅源码注释 | 有/无注释函数，输入输出和副作用有独立真值 | 简介有来源、限制与证据；不展开时可理解输入输出；不凭名字编造行为 |
 | R3-07 | 审阅 read/search 依赖缓存 | 未完成 | 修改实际读取文件；在零结果搜索范围新增注册；不相关文件变化 | 相关审阅失效，不相关审阅复用；新增绑定不能因旧图无边而遗漏 |
+| R3-08 | 锁事件、临界区与共享状态并行性 | 已完成（限定词法共同锁） | 两个持锁访问与一个无锁写入 fixture；查询 `locks` 与 HTML | 共同锁标 `serialized_by_common_lock/exact`；无共同锁标 `potential_race/may`；不声称证明运行时并发 |
 
 本轮输出的精度边界须单列：支持哪些指针操作、哪些别名情况保守近似、哪些保持 opaque。不能承诺任意 C/C++ 程序都获得唯一精确目标。
 
@@ -162,6 +163,6 @@
 
 ## 11. 下一步执行范围
 
-下一轮优先从 R3 的字段/别名/回调基础开始，并继续补齐第 2 轮未支持的表达式边界。R1、R2 的实际验证以 update/001、update/002 为准，下面历史表的初始状态不覆盖更新文档。保留现有 HTML 输出边界，不提前把正式 VSCode 扩展作为主开发对象。
+下一轮先扩展 R3 的字段/别名和回调基础。锁分析已经交付“共同词法锁 + 静态/全局共享对象”的限定子集，下一步才扩展跨函数锁所有权、线程入口和条件变量；同时继续补齐第 2 轮未支持的表达式边界。R1、R2 的实际验证以 update/001、update/002 为准。保留现有 HTML 输出边界，不提前把正式 VSCode 扩展作为主开发对象。
 
 本计划的初始表格用于需求对照；每轮实际交付、是否完成及验证记录以 update/ 对应文档为准。

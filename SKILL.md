@@ -5,7 +5,7 @@ description: Analyze C/C++ SDK repositories with evaluated CMake/Clang evidence,
 
 # SDK Code Atlas
 
-Use the repository-local launcher. Version **0.4.0** establishes layered
+Use the repository-local launcher. Version **0.5.0** establishes layered
 application/domain/infrastructure/interface boundaries while preserving schema
 0.1 compatibility. It is a prototype; do not generalize fixture evidence to
 unsupported C/C++ semantics.
@@ -42,6 +42,10 @@ or incremental update is needed.
   exception semantics. See [round 2 limits](update/002_round2_changes.md).
 - Treat review imports as current-evidence `may` supplements. Read the
   [review protocol](references/review.md) before producing one.
+- Lock analysis uses Clang-resolved lock calls and lexical critical regions.
+  `serialized_by_common_lock` proves a common lock for the two source sites;
+  `potential_race` is a conservative warning and does not prove runtime thread
+  overlap or a complete happens-before relation. Query it with `locks --out`.
 
 ## Delivery and maintenance
 
@@ -52,6 +56,13 @@ and can be re-exported without parsing again.
 For implementation work, follow [architecture](ARCHITECTURE.md). Use the
 [capability catalog](do_func/README.md) to reproduce one feature and
 [artifact map](references/artifacts.md) to inspect files. Run `selftest` plus
-`scripts/check_docs.py` after changes. The proposed stage/checkpoint contract is
+`scripts/check_docs.py` after changes. The document check traverses every project
+Markdown file, validates all local links, current-version documents, ordered
+capability records, and the executable stage contract. The proposed stage/checkpoint contract is
 in [workflow checkpoints](references/workflow-checkpoints.md) and must be owner
 confirmed before CI workflows are created.
+
+At the end of every development round, reconcile all current documents against
+the executable behavior, update the affected numbered `do_func` brief and its
+append-only test log, then run the documented minimum test locally. Do not carry
+forward stale success counts or rewrite a skipped capability as passed.

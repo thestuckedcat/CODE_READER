@@ -1,7 +1,7 @@
-# SDK Code Atlas 0.4 validation report
+# SDK Code Atlas 0.5 validation report
 
-Date: 2026-09-08. Source under test includes the layered architecture and
-repository-local runtime bootstrap. Runtime payloads are ignored by Git.
+Date: 2026-09-09. Source under test includes the layered architecture,
+repository-local runtime bootstrap and lexical lockset analysis. Runtime payloads are ignored by Git.
 
 ## Windows x64
 
@@ -12,7 +12,7 @@ repository-local runtime bootstrap. Runtime payloads are ignored by Git.
 - Viewer dependency: linkedom 0.18.12 below the same platform runtime; a pinned,
   integrity-checked npm CLI was bootstrapped locally because the host exposed
   Node without npm.
-- Result: `doctor_exit=0`, 22 architecture/basic behavioral tests passed,
+- Result: `doctor_exit=0`, 23 architecture/basic behavioral tests passed,
   14 native CFG tests skipped, 0 failed; viewer DOM test passed; platform
   status `passed`.
 
@@ -28,7 +28,7 @@ source-test independence from the historical release ZIP.
 - No `apt`, `sudo`, user-site package, shell profile or global pip mutation was
   used. uv caches, managed Python, packages and Node modules remain under the
   Skill runtime directory.
-- Result: `doctor_exit=0`, the same 22 architecture/basic tests passed,
+- Baseline platform result: `doctor_exit=0`, 22 architecture/basic tests passed,
   14 native CFG tests skipped, 0 failed; freshly generated HTML passed the DOM
   test; platform status `passed`.
 
@@ -54,4 +54,19 @@ preserved in `update/002_round2_changes.md`.
 - CLI workflow contract serialization: passed.
 - Git diff whitespace validation: passed at final review.
 
-Per-feature commands and captured minimum outputs are under `do_func/`.
+## Lock-analysis feature test
+
+- Command: `runtime/windows-x86_64/venv/Scripts/python.exe scripts/run_feature_test.py lock-analysis`.
+- Result: 1 test passed in 14.985 seconds on the first recorded local run.
+- Final post-brief run, including object-by-lock filtering: 1 test passed in
+  10.014 seconds.
+- Covered: lock/unlock events, lexical regions, common-lock serialization,
+  unprotected shared write and conservative `potential_race` query.
+- Not covered: runtime thread overlap, complete happens-before, condition
+  variables or interprocedural lock ownership.
+- Linux/WSL isolated runtime: the same feature test passed in 50.042 seconds on
+  2026-09-09; this was a focused feature run, not a repeat of the full Linux suite.
+- Full Windows platform suite: 37 discovered, 23 passed, 14 native CFG tests
+  skipped, 0 failed; Viewer DOM lock/shared-state interaction passed.
+
+Per-feature commands and captured minimum outputs are under [do_func](do_func/README.md).

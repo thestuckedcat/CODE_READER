@@ -1,0 +1,16 @@
+test_08_lock_and_shared_state_parallelism (test_pipeline.PipelineTest.test_08_lock_and_shared_state_parallelism) ... ok
+----------------------------------------------------------------------
+Ran 1 test in 14.985s
+OK
+
+Linux/WSL isolated runtime:
+test_08_lock_and_shared_state_parallelism (test_pipeline.PipelineTest.test_08_lock_and_shared_state_parallelism) ... ok
+----------------------------------------------------------------------
+Ran 1 test in 50.042s
+OK
+
+Final Windows run after the feature brief, lock-filter query, RAII scope correction and try-lock certainty correction:
+test_08_lock_and_shared_state_parallelism (test_pipeline.PipelineTest.test_08_lock_and_shared_state_parallelism) ... ok
+----------------------------------------------------------------------
+Ran 1 test in 10.014s
+OK

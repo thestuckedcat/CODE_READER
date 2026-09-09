@@ -4,6 +4,8 @@ from .infrastructure.store import digest, filehash
 FUNCTIONS={'FUNCTION_DECL','CXX_METHOD','CONSTRUCTOR','DESTRUCTOR','CONVERSION_FUNCTION','FUNCTION_TEMPLATE'}
 TYPES={'STRUCT_DECL','CLASS_DECL','UNION_DECL','ENUM_DECL','TYPEDEF_DECL','TYPE_ALIAS_DECL'}
 BRANCHES={'IF_STMT','SWITCH_STMT','FOR_STMT','WHILE_STMT','DO_STMT','CONDITIONAL_OPERATOR'}
+LOCK_ACQUIRE_NAMES={'lock','try_lock','pthread_mutex_lock','pthread_mutex_trylock','mtx_lock','spin_lock','read_lock','write_lock'}
+LOCK_RELEASE_NAMES={'unlock','pthread_mutex_unlock','mtx_unlock','spin_unlock','read_unlock','write_unlock'}
 
 def extract(unit,roots,rules=None):
     from .boundaries import classify
@@ -48,6 +50,102 @@ def extract(unit,roots,rules=None):
                 if n.referenced.kind.name not in FUNCTIONS:result.add(var(n.referenced))
             for ch in n.get_children():walk(ch)
         walk(c);return sorted(result)
+    def descendants(c):
+        for child in c.get_children():
+            yield child
+            yield from descendants(child)
+    def shared_decl(c):
+        ref=c.referenced
+        if not ref or ref.kind.name!='VAR_DECL':return None
+        parent=ref.semantic_parent
+        return ref if ref.storage_class.name=='STATIC' or not parent or parent.kind.name not in FUNCTIONS else None
+    def lock_action(c):
+        ref=c.referenced
+        name=(ref.spelling if ref else c.spelling or '').lower()
+        if name in LOCK_RELEASE_NAMES or name.endswith(('_mutex_unlock','_spin_unlock')):return 'release',name
+        if name in LOCK_ACQUIRE_NAMES or name.endswith(('_mutex_lock','_mutex_trylock','_spin_lock')):return 'acquire',name
+        return None,name
+    def analyze_concurrency(function,owner):
+        """Extract lexical lock regions and shared accesses from compiler cursors.
+
+        This deliberately proves only a common lexical lock.  It does not infer
+        thread creation, scheduler ordering, condition-variable semantics, or a
+        whole-program happens-before relation.
+        """
+        nodes=list(descendants(function));events=[];lock_call_ranges=[];lock_ids=set()
+        for call in (n for n in nodes if n.kind.name=='CALL_EXPR'):
+            action,api=lock_action(call)
+            if not action:continue
+            referenced={}
+            for node in descendants(call):
+                declaration=shared_decl(node)
+                if declaration is not None:referenced[var(declaration)]=declaration
+            if not referenced:continue
+            lids=sorted(referenced);lock_ids.update(lids)
+            eid='lock_'+digest([owner,anchor(call),action,lids])[:24]
+            event_certainty='may' if 'try' in api else 'exact'
+            put('lock_event',call,id=eid,owner=owner,action=action,api=api,lock_ids=lids,
+                certainty=event_certainty,guards=[],limitations=['lexical_lockset_only'])
+            events.append(dict(id=eid,cursor=call,action=action,locks=lids,offset=call.extent.start.offset,certainty=event_certainty))
+            lock_call_ranges.append((call.extent.start.offset,call.extent.end.offset))
+        # Recognize common C++ RAII guards. Their destructor is represented as a
+        # scope-end release rather than an invented source call.
+        for decl in (n for n in nodes if n.kind.name=='VAR_DECL' and any(x in n.type.spelling for x in ('lock_guard<','unique_lock<','scoped_lock<'))):
+            referenced={}
+            for node in descendants(decl):
+                declaration=shared_decl(node)
+                if declaration is not None:referenced[var(declaration)]=declaration
+            for lid in list(referenced):
+                if lid==var(decl):referenced.pop(lid)
+            if not referenced:continue
+            lids=sorted(referenced);lock_ids.update(lids);eid='lock_'+digest([owner,anchor(decl),'raii',lids])[:24]
+            put('lock_event',decl,id=eid,owner=owner,action='acquire',api=decl.type.spelling,lock_ids=lids,
+                certainty='exact',guards=[],limitations=['raii_release_at_lexical_scope_end'])
+            scopes=[node.extent.end.offset for node in nodes if node.kind.name=='COMPOUND_STMT' and node.extent.start.offset<=decl.extent.start.offset<node.extent.end.offset]
+            events.append(dict(id=eid,cursor=decl,action='acquire',locks=lids,offset=decl.extent.start.offset,
+                               raii=True,implicit_end=min(scopes) if scopes else function.extent.end.offset))
+        events.sort(key=lambda row:row['offset']);stacks={};regions=[]
+        for event in events:
+            for lid in event['locks']:
+                stack=stacks.setdefault(lid,[])
+                if event['action']=='acquire':stack.append(event)
+                elif stack:
+                    start=stack.pop();regions.append((lid,start,event,start.get('certainty','exact'),event['offset']))
+        for lid,stack in stacks.items():
+            for start in stack:regions.append((lid,start,None,'exact' if start.get('raii') else 'may',start.get('implicit_end',function.extent.end.offset)))
+        function_end=function.extent.end.offset
+        for lid,start,end,certainty,end_offset in regions:
+            rid='region_'+digest([owner,lid,start['id'],end['id'] if end else end_offset])[:24]
+            put('lock_region',start['cursor'],id=rid,owner=owner,lock_id=lid,acquire_event_id=start['id'],
+                release_event_id=end['id'] if end else None,start_offset=start['offset'],
+                end_offset=end_offset,certainty=certainty,
+                limitations=['lexical_region','no_happens_before_proof'])
+        write_ranges=[]
+        for operation in nodes:
+            if operation.kind.name in ('BINARY_OPERATOR','COMPOUND_ASSIGNMENT_OPERATOR'):
+                children=list(operation.get_children())
+                if len(children)<2:continue
+                start=children[0].extent.end.offset;end=children[1].extent.start.offset
+                tokens=[t.spelling for t in operation.get_tokens() if start<=t.location.offset<end]
+                if any(x in ('=','+=','-=','*=','/=','|=','&=','^=','<<=','>>=','%=') for x in tokens):
+                    write_ranges.append((children[0].extent.start.offset,children[0].extent.end.offset))
+            elif operation.kind.name=='UNARY_OPERATOR':
+                tokens={t.spelling for t in operation.get_tokens()}
+                if tokens&{'++','--'}:write_ranges.append((operation.extent.start.offset,operation.extent.end.offset))
+        seen_access=set()
+        for refnode in (n for n in nodes if n.kind.name in ('DECL_REF_EXPR','MEMBER_REF_EXPR')):
+            declaration=shared_decl(refnode)
+            if declaration is None:continue
+            oid=var(declaration);offset=refnode.extent.start.offset
+            if oid in lock_ids or any(start<=offset<=end for start,end in lock_call_ranges):continue
+            key=(oid,refnode.extent.start.offset,refnode.extent.end.offset)
+            if key in seen_access:continue
+            seen_access.add(key)
+            held=sorted({lid for lid,start,end,_,end_offset in regions if start['offset']<=offset<=end_offset})
+            access='write' if any(start<=offset<=end for start,end in write_ranges) else 'read'
+            put('shared_access',refnode,id='access_'+digest([owner,anchor(refnode),oid,access])[:24],owner=owner,
+                object_id=oid,access=access,held_lock_ids=held,certainty='may' if not held else 'exact',
+                limitations=['lexical_lockset_only','thread_reachability_not_proven'])
     def flow(c,owner,destination,expression,kind,guards):
         rid='flow_'+digest([owner,anchor(c),destination,kind])[:24]
         inputs=refs(expression)
@@ -68,6 +166,7 @@ def extract(unit,roots,rules=None):
                 storage=c.storage_class.name,summary=c.brief_comment or '功能简介待审阅；可查看签名与已提取的调用。',summary_origin='source_comment' if c.brief_comment else 'missing')
             owner=fid
             ir.append(dict(id=fid,format='clang_cursor_operations',cfg_status='unsupported',operations=[]))
+            analyze_concurrency(c,fid)
         elif kind in TYPES and inside(c) and c.spelling:
             fields=[dict(id=var(f),name=f.spelling,type=f.type.spelling,offset_bits=f.get_field_offsetof()) for f in c.get_children() if f.kind.name=='FIELD_DECL']
             put('type',c,id=base(c)+'_'+unit['id'][:12],name=c.spelling,type_kind=kind,fields=fields,size_bytes=c.type.get_size(),layout_configuration=unit['id'])

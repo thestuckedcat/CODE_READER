@@ -48,6 +48,10 @@ def parser():
     flow.add_argument("--value")
     flow.add_argument("--direction", choices=["forward", "backward"], default="forward")
     flow.add_argument("--budget", type=int, default=2000)
+    locks = commands.add_parser("locks")
+    locks.add_argument("--out", required=True)
+    locks.add_argument("--object")
+    locks.add_argument("--lock")
     review = commands.add_parser("review-import")
     review.add_argument("--out", required=True)
     review.add_argument("--result", required=True)
@@ -93,6 +97,8 @@ def main(argv=None):
         result = app.trace(args.out, args.function, args.direction, args.depth, args.budget)
     elif args.cmd == "flow":
         result = app.flow(args.out, args.function, args.symbol, args.parameter, args.value, args.direction, args.budget)
+    elif args.cmd == "locks":
+        result = app.locks(args.out, args.object, args.lock)
     elif args.cmd == "validate":
         result = app.validate(args.out)
     elif args.cmd == "review-import":

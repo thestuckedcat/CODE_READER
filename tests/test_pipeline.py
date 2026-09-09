@@ -76,4 +76,18 @@ class PipelineTest(unittest.TestCase):
   directory=self.work/'env_headers';directory.mkdir()
   with patch.dict(os.environ,{'CPATH':str(directory)}):
    self.cli(*self.base);g,_=self.graph();self.assertEqual(g['coverage']['reused'],0)
+ def test_08_lock_and_shared_state_parallelism(self):
+  self.cli(*self.base);g,_=self.graph()
+  lock=next(row for row in g['locks'] if row['name']=='shared_gate')
+  shared=next(row for row in g['shared_state_summaries'] if row['name']=='shared_counter')
+  self.assertGreaterEqual(len([row for row in g['lock_events'] if lock['id'] in row['lock_ids']]),4)
+  self.assertTrue(any(row['held_lock_ids']==[lock['id']] and row['access']=='write' for row in g['shared_accesses'] if row['object_id']==shared['object_id']))
+  self.assertTrue(any(not row['held_lock_ids'] for row in g['shared_accesses'] if row['object_id']==shared['object_id']))
+  self.assertEqual(shared['status'],'potential_race')
+  self.assertTrue(any(row['relation']=='serialized_by_common_lock' for row in g['concurrency_findings'] if row['object_id']==shared['object_id']))
+  self.assertTrue(any(row['relation']=='potentially_parallel_conflict' for row in g['concurrency_findings'] if row['object_id']==shared['object_id']))
+  result=json.loads(self.cli('locks','--out',str(self.out),'--object','shared_counter').stdout)
+  self.assertEqual(result['shared_state'][0]['status'],'potential_race')
+  by_lock=json.loads(self.cli('locks','--out',str(self.out),'--lock','shared_gate').stdout)
+  self.assertEqual({row['name'] for row in by_lock['shared_state']},{'shared_counter'})
 if __name__=='__main__':unittest.main(verbosity=2)

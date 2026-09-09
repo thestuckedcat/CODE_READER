@@ -11,12 +11,12 @@ listed as a published pointer.
 | `environment` | process environment; runtime layout | `doctor.json` | `environment_ready` |
 | `inventory` | workspace roots | `inventory.jsonl`; `workspace_manifest.json`; `change_set.json` | `inventory_recorded` |
 | `configure` | CMake roots; parameters; compile databases | `build_context.json`; `compile_commands.json`; `configuration_questions.json` | `build_context_ready` |
-| `semantic_extract` | build context; source dependencies | compiler facts; function IR; diagnostics; parse plan | `semantic_facts_ready` |
-| `graph` | compiler facts; boundary policy | derived relations; issues; coverage | `graph_ready` |
-| `dataflow` | compiler facts; CFG IR; budgets | value graph; summaries; dataflow plan | `dataflow_ready_or_not_requested` |
-| `review` | graph; unresolved issues | review plan and per-issue requests | `review_requests_ready` |
-| `publish` | graph; manifest | immutable snapshot plus atomic `current.json` | `snapshot_published` |
-| `export` | published snapshot; viewer template | HTML, export bundle and validation | `export_validated` |
+| `semantic_extract` | `build_context.json`; source dependencies | `compiler_facts.jsonl`; `function_ir.jsonl`; `diagnostics.json`; `parse_plan.json` | `semantic_facts_ready` |
+| `graph` | compiler facts; boundary policy | `derived_relations.jsonl`; `lock_analysis.json`; `issues.json`; `coverage.json` | `graph_ready` |
+| `dataflow` | compiler facts; `cfg_ir.jsonl`; flow budgets | `value_graph.jsonl`; `function_summaries.jsonl`; `dataflow_plan.json` | `dataflow_ready_or_not_requested` |
+| `review` | graph; unresolved issues | `review_plan.json`; `review_request.json` | `review_requests_ready` |
+| `publish` | graph; manifest | `snapshots/<id>/graph.json`; `snapshots/<id>/analysis_manifest.json`; `current.json` | `snapshot_published` |
+| `export` | published snapshot; viewer template | `*.html`; `*.export_bundle.json`; `*.export_validation.json` | `export_validated` |
 
 Proposed CI gates after confirmation:
 

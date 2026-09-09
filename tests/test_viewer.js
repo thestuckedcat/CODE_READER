@@ -20,4 +20,8 @@ assert.ok(document.getElementById('tree').textContent.includes('间接目标未�
 selectFunction('sdk_entry');
 assert.ok(document.getElementById('detail').textContent.includes('parameters'));
 assert.ok(document.getElementById('objects').textContent.includes('settings'));
-console.log('PASS: viewer search, function details, first divergence/topmost, unresolved boundary, objects (DOM; not browser layout).');
+selectFunction('locked_write');
+assert.ok(document.getElementById('detail').textContent.includes('锁事件 2'));
+assert.ok(document.getElementById('locks').textContent.includes('shared_counter'));
+assert.ok(document.getElementById('locks').textContent.includes('potential_race'));
+console.log('PASS: viewer search, function details, paths, unresolved boundary, objects, locks and shared-state warning (DOM; not browser layout).');

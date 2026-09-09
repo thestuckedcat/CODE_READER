@@ -34,8 +34,10 @@ def merge(results):
     objects=list(by_kind['object'].values());objids={o['id'] for o in objects if o['lifetime']=='static'}
     states=[dict(id='state_'+f['id'],object_id=f['target'],owner=f['owner'],kind='write_or_initialize',evidence_ids=f['evidence_ids'],certainty='may') for f in flows if f['target'] in objids]
     states += [dict(id='state_'+r['id'],object_id=r['target'],owner=r['owner'],kind='reference',evidence_ids=r['evidence_ids'],certainty='exact') for r in by_kind['reference'].values() if r['target'] in objids]
+    from .concurrency import analyze as analyze_concurrency
+    concurrency=analyze_concurrency(by_kind)
     return dict(functions=fs,types=list(by_kind['type'].values()),objects=objects,callsites=calls,call_targets=edges,flow_edges=flows,state_events=states,
-                annotations=[],evidence=list(by_kind['evidence'].values()),issues=issues,agent_supplements=[])
+                annotations=[],evidence=list(by_kind['evidence'].values()),issues=issues,agent_supplements=[],**concurrency)
 
 def resolve(graph,name):
     found=[f for f in graph['functions'] if name in (f['id'],f['name'],f['display_name'])]

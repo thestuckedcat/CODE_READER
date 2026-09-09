@@ -49,6 +49,13 @@ class AtlasApplication:
         graph, _ = load_snapshot(output)
         return trace(graph, function, direction, depth, budget)
 
+    def locks(self, output, object_name=None, lock_name=None):
+        from ..concurrency import query
+        from ..pipeline import load_snapshot
+
+        graph, _ = load_snapshot(output)
+        return query(graph, object_name, lock_name)
+
     def flow(self, output, function=None, symbol=None, parameter=None, value=None, direction="forward", budget=2000):
         from ..pipeline import load_snapshot
 
