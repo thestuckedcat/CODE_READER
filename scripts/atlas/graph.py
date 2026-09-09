@@ -36,8 +36,10 @@ def merge(results):
     states += [dict(id='state_'+r['id'],object_id=r['target'],owner=r['owner'],kind='reference',evidence_ids=r['evidence_ids'],certainty='exact') for r in by_kind['reference'].values() if r['target'] in objids]
     from .concurrency import analyze as analyze_concurrency
     concurrency=analyze_concurrency(by_kind)
+    from .aliasing import analyze as analyze_aliases
+    aliases=analyze_aliases(by_kind,fs,calls,edges,objects,list(by_kind['type'].values()))
     return dict(functions=fs,types=list(by_kind['type'].values()),objects=objects,callsites=calls,call_targets=edges,flow_edges=flows,state_events=states,
-                annotations=[],evidence=list(by_kind['evidence'].values()),issues=issues,agent_supplements=[],**concurrency)
+                annotations=[],evidence=list(by_kind['evidence'].values()),issues=issues,agent_supplements=[],**concurrency,**aliases)
 
 def resolve(graph,name):
     found=[f for f in graph['functions'] if name in (f['id'],f['name'],f['display_name'])]

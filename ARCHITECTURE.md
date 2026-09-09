@@ -17,13 +17,13 @@ infrastructure (artifact store, CMake, Clang, native process) implements
 technical capabilities consumed by application modules. Domain never imports it.
 ```
 
-The current 0.5 architecture establishes enforceable boundaries for new work while
+The current 0.6 architecture establishes enforceable boundaries for new work while
 retaining the mature analysis modules as transitional components:
 
 | Layer | Stable modules | Transitional modules |
 |---|---|---|
 | Interface | `atlas.interfaces.cli`, `scripts/sdk_atlas.py` shim | none |
-| Application | `atlas.application.service` | `pipeline`, `graph`, `dataflow`, `concurrency`, `review` |
+| Application | `atlas.application.service` | `pipeline`, `graph`, `dataflow`, `concurrency`, `aliasing`, `review` |
 | Domain | `atlas.domain.contracts` | dictionary payload shapes (schema 0.1) |
 | Infrastructure | `atlas.infrastructure.store` | `build`, `configuration`, `extract`, `native`, `search` |
 | Presentation | offline `viewer` adapter and `assets/viewer.html` | none |

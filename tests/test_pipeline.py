@@ -66,8 +66,10 @@ class PipelineTest(unittest.TestCase):
   p.update(task_id='review_'+second['id'],issue_ids=[second['id']],input_hash=second['input_hash'],relation_proposals=[],read_set=[],status='unresolved')
   f.write_text(json.dumps(body));self.cli('review-import','--out',str(self.out),'--result',str(f))
  def test_05_parse_failure_does_not_reuse_old_facts(self):
-  p=self.repo/'other.c';p.write_text('#include "missing_business_header.h"\n'+p.read_text())
-  self.cli(*self.base);g,_=self.graph();self.assertTrue(g['coverage']['failed']);self.assertFalse(any(f['name']=='leaf' for f in g['functions']))
+  p=self.repo/'other.c';original=p.read_text();p.write_text('#include "missing_business_header.h"\n'+original)
+  try:
+   self.cli(*self.base);g,_=self.graph();self.assertTrue(g['coverage']['failed']);self.assertFalse(any(f['name']=='leaf' for f in g['functions']))
+  finally:p.write_text(original)
  def test_06_negative_dependency(self):
   (self.repo/'header_without_extension').write_text('#define NEW 1\n')
   self.cli(*self.base);g,_=self.graph();self.assertEqual(g['coverage']['reused'],0)
@@ -90,4 +92,20 @@ class PipelineTest(unittest.TestCase):
   self.assertEqual(result['shared_state'][0]['status'],'potential_race')
   by_lock=json.loads(self.cli('locks','--out',str(self.out),'--lock','shared_gate').stdout)
   self.assertEqual({row['name'] for row in by_lock['shared_state']},{'shared_counter'})
+ def test_09_field_alias_argument_and_callback_candidates(self):
+  self.cli(*self.base);g,_=self.graph();functions={row['id']:row for row in g['functions']}
+  pair=next(row for row in g['objects'] if row['name']=='shared_pair')
+  local=[row for row in g['field_accesses'] if functions[row['owner']]['name']=='alias_write' and row['field_name']=='left']
+  self.assertTrue(local);self.assertEqual(local[0]['object_ids'],[pair['id']]);self.assertEqual(local[0]['certainty'],'exact')
+  crossed=[row for row in g['field_accesses'] if functions[row['owner']]['name']=='set_pair_left' and row['field_name']=='left']
+  self.assertTrue(crossed);self.assertEqual(crossed[0]['access_paths'],['shared_pair.left'])
+  right=[row for row in g['field_accesses'] if row['field_name']=='right' and pair['id'] in row['object_ids']]
+  self.assertTrue(right);self.assertNotEqual(local[0]['field_id'],right[0]['field_id'])
+  callback=next(row for row in g['callback_targets'] if functions[row['owner']]['name']=='register_callback')
+  self.assertEqual({functions[fid]['name'] for fid in callback['candidate_function_ids']},{'leaf'})
+  ownership=next(row for row in g['lock_ownership_summaries'] if functions[row['function_id']]['name']=='parameter_locked_write')
+  gate=next(row for row in g['objects'] if row['name']=='shared_gate')
+  self.assertEqual(ownership['acquired_lock_ids'],[gate['id']]);self.assertEqual(ownership['released_lock_ids'],[gate['id']])
+  result=json.loads(self.cli('aliases','--out',str(self.out),'--object','shared_pair').stdout)
+  self.assertTrue(result['field_accesses']);self.assertTrue(all(pair['id'] in row['object_ids'] for row in result['field_accesses']))
 if __name__=='__main__':unittest.main(verbosity=2)

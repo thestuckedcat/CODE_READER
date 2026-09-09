@@ -2,7 +2,7 @@
 
 `runs/<run>/artifacts.json` 是阶段产物定位入口：logical_name + scope_key 指向 `objects/<hash前2位>/<hash>.json[l]`。所有自有数据以 schema_version/record_kind/record_id/payload/provenance envelope 保存。不同 TU 不会相互覆盖。
 
-实际实现：request、doctor、workspace_manifest、inventory、parameters、assumptions、cmake_discovery、configure_request/result、configuration_questions（失败时）、compile_commands、cmake_reply、build_context、parse_plan、每 TU facts/function_ir/diagnostics/dependencies/receipt、compiler_facts、derived_relations、lock_analysis、function_summaries、issues、coverage、review_plan/request/result、validation_report、configuration_patch（需要时）、agent_supplements、change_set、invalidation_plan、checkpoint、snapshot_validation、run_summary。
+实际实现：request、doctor、workspace_manifest、inventory、parameters、assumptions、cmake_discovery、configure_request/result、configuration_questions（失败时）、compile_commands、cmake_reply、build_context、parse_plan、每 TU facts/function_ir/diagnostics/dependencies/receipt、compiler_facts、derived_relations、lock_analysis、alias_analysis、field_accesses、lock_ownership_summaries、callback_targets、function_summaries、issues、coverage、review_plan/request/result、validation_report、configuration_patch（需要时）、agent_supplements、change_set、invalidation_plan、checkpoint、snapshot_validation、run_summary。
 
 直接可读文件：
 
@@ -14,5 +14,7 @@
 - HTML 相邻 `<name>.export_bundle.json` / export_validation.json：可独立检查的导出数据。
 
 `lock_analysis.json` 包含锁对象、加解锁事件、词法临界区、共享访问、共同锁关系和保守冲突结论。它不表示已证明线程可达性或完整 happens-before。
+
+`alias_analysis.json` 与相邻 JSONL 产物记录有限别名闭包、单层字段路径、跨调用实参/形参对象、锁所有权摘要和函数指针字段候选。数组、强制转换、指针算术和多目标情况不会被提升为唯一精确关系。
 
 与完整设计差异：本版不单独生成 symbol_map（使用 Clang USR/定义内容派生身份）、annotations task 文件、完整 dependency facets 索引、分片图和 events.jsonl；未实现的高级协议不会产生空文件假装完成。function_summaries 是 partial 摘要，不包含 CFG 固定点。新增源码文件导致保守 TU 失效；已有文件变动按真实 include 依赖处理。再次分析不会直接采用旧 Agent 候选来冒充当前事实。

@@ -27,3 +27,21 @@ int locked_read(void) {
     return value;
 }
 void unlocked_write(int value) { shared_counter = value; }
+static void parameter_locked_write(AtlasMutex *mutex, int value) {
+    atlas_mutex_lock(mutex);
+    shared_counter = value;
+    atlas_mutex_unlock(mutex);
+}
+void call_parameter_locked_write(int value) { parameter_locked_write(&shared_gate, value); }
+
+struct SharedPair { int left; int right; };
+static struct SharedPair shared_pair = {0, 0};
+void alias_write(int value) {
+    struct SharedPair *pointer = &shared_pair;
+    struct SharedPair *copy = pointer;
+    copy->left = value;
+}
+static void set_pair_left(struct SharedPair *pair, int value) { pair->left = value; }
+void alias_argument_write(int value) { set_pair_left(&shared_pair, value); }
+int direct_right_read(void) { return shared_pair.right; }
+void install_callback(void) { register_callback(leaf); }

@@ -1,7 +1,7 @@
-# SDK Code Atlas 0.5 validation report
+# SDK Code Atlas 0.6 validation report
 
-Date: 2026-09-09. Source under test includes the layered architecture,
-repository-local runtime bootstrap and lexical lockset analysis. Runtime payloads are ignored by Git.
+Date: 2026-09-10. Source under test includes the layered architecture,
+repository-local runtime, lexical locksets and bounded field/alias analysis. Runtime payloads are ignored by Git.
 
 ## Windows x64
 
@@ -12,7 +12,7 @@ repository-local runtime bootstrap and lexical lockset analysis. Runtime payload
 - Viewer dependency: linkedom 0.18.12 below the same platform runtime; a pinned,
   integrity-checked npm CLI was bootstrapped locally because the host exposed
   Node without npm.
-- Result: `doctor_exit=0`, 23 architecture/basic behavioral tests passed,
+- Result: `doctor_exit=0`, 24 architecture/basic behavioral tests passed,
   14 native CFG tests skipped, 0 failed; viewer DOM test passed; platform
   status `passed`.
 
@@ -66,7 +66,20 @@ preserved in `update/002_round2_changes.md`.
   variables or interprocedural lock ownership.
 - Linux/WSL isolated runtime: the same feature test passed in 50.042 seconds on
   2026-09-09; this was a focused feature run, not a repeat of the full Linux suite.
-- Full Windows platform suite: 37 discovered, 23 passed, 14 native CFG tests
-  skipped, 0 failed; Viewer DOM lock/shared-state interaction passed.
+- v0.5 full Windows platform suite: 37 discovered, 23 passed, 14 native CFG
+  tests skipped, 0 failed; Viewer DOM lock/shared-state interaction passed.
+
+## Field-alias and callback feature test
+
+- Command: `runtime/windows-x86_64/venv/Scripts/python.exe scripts/run_feature_test.py field-alias-analysis`.
+- Final focused Windows result after the completed brief: 1 passed in 10.285 seconds.
+- Focused Linux/WSL result using the repository-local runtime: 1 passed in
+  67.393 seconds; no global dependency was installed.
+- Full Windows platform suite: 38 discovered, 24 passed, 14 native CFG tests
+  skipped, 0 failed; Viewer field/callback/lock interaction passed.
+- A first failed attempt exposed test-state leakage and pointer-symbol/object
+  conflation. Both were corrected before the recorded full pass.
+- Scope is limited to one-level fields, finite address/copy/argument propagation,
+  lock ownership summaries and callback registration candidates.
 
 Per-feature commands and captured minimum outputs are under [do_func](do_func/README.md).

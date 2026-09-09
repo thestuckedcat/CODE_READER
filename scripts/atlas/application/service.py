@@ -56,6 +56,13 @@ class AtlasApplication:
         graph, _ = load_snapshot(output)
         return query(graph, object_name, lock_name)
 
+    def aliases(self, output, object_name=None, function_name=None):
+        from ..aliasing import query
+        from ..pipeline import load_snapshot
+
+        graph, _ = load_snapshot(output)
+        return query(graph, object_name, function_name)
+
     def flow(self, output, function=None, symbol=None, parameter=None, value=None, direction="forward", budget=2000):
         from ..pipeline import load_snapshot
 

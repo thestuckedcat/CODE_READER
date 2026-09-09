@@ -15,6 +15,7 @@
 | 09 | 标量数据流 | [09-scalar-dataflow](09-scalar-dataflow/README.md) |
 | 10 | 打包 | [10-packaging](10-packaging/README.md) |
 | 11 | 锁与共享状态并行性 | [11-lock-analysis](11-lock-analysis/README.md) |
+| 12 | 字段别名、锁所有权与回调候选 | [12-field-alias-analysis](12-field-alias-analysis/README.md) |
 
 使用隔离运行时执行单项测试：
 

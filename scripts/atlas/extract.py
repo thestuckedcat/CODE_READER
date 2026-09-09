@@ -50,6 +50,13 @@ def extract(unit,roots,rules=None):
                 if n.referenced.kind.name not in FUNCTIONS:result.add(var(n.referenced))
             for ch in n.get_children():walk(ch)
         walk(c);return sorted(result)
+    def function_refs(c):
+        result=set()
+        def walk(n):
+            if n.kind.name in ('DECL_REF_EXPR','MEMBER_REF_EXPR') and n.referenced and n.referenced.kind.name in FUNCTIONS:
+                result.add(base(n.referenced))
+            for child in n.get_children():walk(child)
+        walk(c);return sorted(result)
     def descendants(c):
         for child in c.get_children():
             yield child
@@ -59,6 +66,9 @@ def extract(unit,roots,rules=None):
         if not ref or ref.kind.name!='VAR_DECL':return None
         parent=ref.semantic_parent
         return ref if ref.storage_class.name=='STATIC' or not parent or parent.kind.name not in FUNCTIONS else None
+    def lock_decl(c):
+        ref=c.referenced
+        return ref if ref and ref.kind.name in ('VAR_DECL','PARM_DECL') else None
     def lock_action(c):
         ref=c.referenced
         name=(ref.spelling if ref else c.spelling or '').lower()
@@ -78,7 +88,7 @@ def extract(unit,roots,rules=None):
             if not action:continue
             referenced={}
             for node in descendants(call):
-                declaration=shared_decl(node)
+                declaration=lock_decl(node)
                 if declaration is not None:referenced[var(declaration)]=declaration
             if not referenced:continue
             lids=sorted(referenced);lock_ids.update(lids)
@@ -93,7 +103,7 @@ def extract(unit,roots,rules=None):
         for decl in (n for n in nodes if n.kind.name=='VAR_DECL' and any(x in n.type.spelling for x in ('lock_guard<','unique_lock<','scoped_lock<'))):
             referenced={}
             for node in descendants(decl):
-                declaration=shared_decl(node)
+                declaration=lock_decl(node)
                 if declaration is not None:referenced[var(declaration)]=declaration
             for lid in list(referenced):
                 if lid==var(decl):referenced.pop(lid)
@@ -146,12 +156,59 @@ def extract(unit,roots,rules=None):
             put('shared_access',refnode,id='access_'+digest([owner,anchor(refnode),oid,access])[:24],owner=owner,
                 object_id=oid,access=access,held_lock_ids=held,certainty='may' if not held else 'exact',
                 limitations=['lexical_lockset_only','thread_reachability_not_proven'])
+    def analyze_aliases(function,owner):
+        """Record bounded pointer copies and single-level field access seeds."""
+        nodes=list(descendants(function));write_ranges=[]
+        def variables(node):
+            found={}
+            for item in (node,*descendants(node)):
+                ref=item.referenced
+                if ref and ref.kind.name in ('VAR_DECL','PARM_DECL'):found[var(ref)]=ref
+            return found
+        def pointer(declaration):
+            return declaration is not None and ('*' in declaration.type.spelling or declaration.type.kind.name in ('POINTER','BLOCKPOINTER','MEMBERPOINTER'))
+        def addresses(node):
+            found={}
+            for item in (node,*descendants(node)):
+                if item.kind.name!='UNARY_OPERATOR' or '&' not in {token.spelling for token in item.get_tokens()}:continue
+                found.update(variables(item))
+            return found
+        for operation in nodes:
+            if operation.kind.name in ('BINARY_OPERATOR','COMPOUND_ASSIGNMENT_OPERATOR'):
+                children=list(operation.get_children())
+                if len(children)<2:continue
+                between=[t.spelling for t in operation.get_tokens() if children[0].extent.end.offset<=t.location.offset<children[1].extent.start.offset]
+                if any(token in ('=','+=','-=','*=','/=','|=','&=','^=','<<=','>>=','%=') for token in between):
+                    write_ranges.append((children[0].extent.start.offset,children[0].extent.end.offset))
+                if '=' in between:
+                    left=variables(children[0]);target=next((symbol for symbol,declaration in left.items() if pointer(declaration)),None)
+                    if target:
+                        direct=addresses(children[1]);sources=sorted(direct or variables(children[1]))
+                        put('alias_relation',operation,id='alias_'+digest([owner,anchor(operation),target,sources])[:24],owner=owner,
+                            target_symbol=target,source_symbols=sources,relation='address_of' if direct else 'pointer_copy',
+                            certainty='exact' if len(sources)==1 else 'may',limitations=['flow_insensitive_within_function'])
+            elif operation.kind.name=='UNARY_OPERATOR' and {t.spelling for t in operation.get_tokens()}&{'++','--'}:
+                write_ranges.append((operation.extent.start.offset,operation.extent.end.offset))
+        for declaration in (node for node in nodes if node.kind.name=='VAR_DECL' and pointer(node)):
+            children=list(declaration.get_children())
+            if not children:continue
+            initializer=children[-1];direct=addresses(initializer);sources=sorted(direct or variables(initializer))
+            if sources:
+                put('alias_relation',declaration,id='alias_'+digest([owner,anchor(declaration),var(declaration),sources])[:24],owner=owner,
+                    target_symbol=var(declaration),source_symbols=sources,relation='address_of' if direct else 'pointer_copy',
+                    certainty='exact' if len(sources)==1 else 'may',limitations=['flow_insensitive_within_function'])
+        for member in (node for node in nodes if node.kind.name=='MEMBER_REF_EXPR' and node.referenced and node.referenced.kind.name=='FIELD_DECL'):
+            bases=variables(member);field=member.referenced;offset=member.extent.start.offset
+            access='write' if any(start<=offset<=end for start,end in write_ranges) else 'read'
+            put('field_access_seed',member,id='field_seed_'+digest([owner,anchor(member),base(field),sorted(bases),access])[:24],owner=owner,
+                base_symbols=sorted(bases),field_id=base(field),field_name=field.spelling,access=access,
+                expression=raw(member),certainty='may',limitations=['single_level_field_path'])
     def flow(c,owner,destination,expression,kind,guards):
         rid='flow_'+digest([owner,anchor(c),destination,kind])[:24]
         inputs=refs(expression)
         # Function calls are an opaque value unless matched by argument/return bindings later.
         put('flow',c,id=rid,owner=owner,sources=inputs,target=destination,expression=raw(expression),
-            relation=kind,certainty='may',guards=guards,limitations=['path_insensitive','alias_not_solved'])
+            function_sources=function_refs(expression),relation=kind,certainty='may',guards=guards,limitations=['path_insensitive','alias_not_solved'])
     def walk(c,owner=None,guards=None):
         guards=guards or []
         if c.location.file and not inside(c):return
@@ -167,6 +224,7 @@ def extract(unit,roots,rules=None):
             owner=fid
             ir.append(dict(id=fid,format='clang_cursor_operations',cfg_status='unsupported',operations=[]))
             analyze_concurrency(c,fid)
+            analyze_aliases(c,fid)
         elif kind in TYPES and inside(c) and c.spelling:
             fields=[dict(id=var(f),name=f.spelling,type=f.type.spelling,offset_bits=f.get_field_offsetof()) for f in c.get_children() if f.kind.name=='FIELD_DECL']
             put('type',c,id=base(c)+'_'+unit['id'][:12],name=c.spelling,type_kind=kind,fields=fields,size_bytes=c.type.get_size(),layout_configuration=unit['id'])
@@ -186,7 +244,7 @@ def extract(unit,roots,rules=None):
             definition=ref.get_definition() if ref else None
             definition_path=str(Path(str(definition.location.file)).resolve()) if definition and definition.location.file else None
             args=[]
-            for i,a in enumerate(c.get_arguments()):args.append(dict(index=i,expression=raw(a),sources=refs(a),evidence_ids=[anchor(a)]))
+            for i,a in enumerate(c.get_arguments()):args.append(dict(index=i,expression=raw(a),sources=refs(a),function_sources=function_refs(a),evidence_ids=[anchor(a)]))
             put('callsite',c,id=cid,owner=owner,callee=c.spelling or raw(c).split('(')[0],target_base=target,
                 dispatch='virtual' if virtual else 'direct' if target else 'indirect',arguments=args,guards=guards,
                 expression=raw(c),target_declaration=ref_path,target_definition=definition_path,boundary_kind=stop,unknown_target_possible=virtual or not bool(target))

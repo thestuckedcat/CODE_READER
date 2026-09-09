@@ -201,6 +201,9 @@ def analyze(args,store,roots):
         graph['shared_accesses']=[e for e in graph['shared_accesses'] if e['owner'] in selected]
         from .concurrency import summarize as summarize_concurrency
         graph.update(summarize_concurrency({o['id']:o for o in graph['objects']},graph['lock_events'],graph['lock_regions'],graph['shared_accesses']))
+        for key in ('alias_relations','alias_summaries','field_accesses','callback_targets'):
+            graph[key]=[row for row in graph[key] if row['owner'] in selected]
+        graph['lock_ownership_summaries']=[row for row in graph['lock_ownership_summaries'] if row['function_id'] in selected]
     search.save()
     graph['boundaries']=[]
     for call in graph['callsites']:
@@ -217,7 +220,7 @@ def analyze(args,store,roots):
         graph['issues'].append(dict(id='parse_'+digest(f)[:24],kind='environment_blocker',subject_id=f['file'],uncertain_properties=['translation_unit'],reason='Clang parse failed; no facts imported',evidence_ids=[],affected_scope=f['file'],blocking=False,next_action='fix_configuration',status='unresolved',input_hash=digest(f),diagnostics=f['diagnostics']))
     scope=dict(mode='interface' if args.interface else 'target' if args.target else 'repository',interface=args.interface,target=args.target,direction=args.direction)
     coverage=dict(selected_scope=scope,total_available_units=len(all_units),processed_units=len(processed),parsed=parsed,reused=reused,failed=failed,pending_units=[u['file'] for u in pending],
-                  boundary_policy=rules,candidate_index=dict(scanned_files=search.scanned,reused_files=search.reused),capabilities=dict(direct_calls='ready',types='ready',global_objects='ready',locks='lexical_common_lock',shared_state_parallelism='conservative_may',data_flow='partial_path_insensitive',cfg='unsupported',alias='unsupported',kernel_boundary_rules='not_implemented'),
+                  boundary_policy=rules,candidate_index=dict(scanned_files=search.scanned,reused_files=search.reused),capabilities=dict(direct_calls='ready',types='ready',global_objects='ready',locks='lexical_common_lock',shared_state_parallelism='conservative_may',field_alias='bounded_single_level',callback_targets='bounded_registration_candidates',data_flow='partial_path_insensitive',cfg='unsupported',kernel_boundary_rules='not_implemented'),
                   complete_call_chain=False,completed_requested_search=not bool(pending or failed),truncated=bool(pending))
     graph['coverage']=coverage;graph['scope']=scope
     if native_tool:
@@ -231,6 +234,10 @@ def analyze(args,store,roots):
     store.put('compiler_facts.jsonl',[f for r in results for f in r['facts']])
     store.put('derived_relations.jsonl',graph['call_targets']+graph['flow_edges']+graph['lock_regions']+graph['concurrency_findings'])
     store.put('lock_analysis.json',dict(status=graph['concurrency_status'],locks=graph['locks'],events=graph['lock_events'],regions=graph['lock_regions'],accesses=graph['shared_accesses'],findings=graph['concurrency_findings'],shared_state=graph['shared_state_summaries']))
+    store.put('alias_analysis.json',dict(status=graph['alias_status'],relations=graph['alias_relations'],summaries=graph['alias_summaries']))
+    store.put('field_accesses.jsonl',graph['field_accesses'])
+    store.put('lock_ownership_summaries.jsonl',graph['lock_ownership_summaries'])
+    store.put('callback_targets.jsonl',graph['callback_targets'])
     if not native_tool:store.put('function_summaries.jsonl',[dict(function_id=f['id'],status='partial',flow_ids=[e['id'] for e in graph['flow_edges'] if e['owner']==f['id']],limitations=['no_CFG_fixed_point']) for f in graph['functions']])
     store.put('issues.json',graph['issues']);store.put('coverage.json',coverage)
     if not graph['functions'] and failed:raise RuntimeError('All selected function analysis failed; previous published snapshot retained')

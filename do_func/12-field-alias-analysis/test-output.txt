@@ -1,0 +1,16 @@
+test_09_field_alias_argument_and_callback_candidates (test_pipeline.PipelineTest.test_09_field_alias_argument_and_callback_candidates) ... ok
+----------------------------------------------------------------------
+Ran 1 test in 15.100s
+OK
+
+Final focused Windows run after the brief and capability-report correction:
+test_09_field_alias_argument_and_callback_candidates (test_pipeline.PipelineTest.test_09_field_alias_argument_and_callback_candidates) ... ok
+----------------------------------------------------------------------
+Ran 1 test in 10.285s
+OK
+
+Linux/WSL repository-local runtime:
+test_09_field_alias_argument_and_callback_candidates (test_pipeline.PipelineTest.test_09_field_alias_argument_and_callback_candidates) ... ok
+----------------------------------------------------------------------
+Ran 1 test in 67.393s
+OK

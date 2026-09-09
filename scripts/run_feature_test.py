@@ -18,6 +18,7 @@ FEATURES = {
     "scalar-dataflow": ["test_round2.RoundTwo.test_cross_function_return_and_callsite_isolation"],
     "packaging": ["test_architecture.ArchitectureTest.test_document_reconciliation"],
     "lock-analysis": ["test_pipeline.PipelineTest.test_08_lock_and_shared_state_parallelism"],
+    "field-alias-analysis": ["test_pipeline.PipelineTest.test_09_field_alias_argument_and_callback_candidates"],
 }
 
 

@@ -52,6 +52,10 @@ def parser():
     locks.add_argument("--out", required=True)
     locks.add_argument("--object")
     locks.add_argument("--lock")
+    aliases = commands.add_parser("aliases")
+    aliases.add_argument("--out", required=True)
+    aliases.add_argument("--object")
+    aliases.add_argument("--function")
     review = commands.add_parser("review-import")
     review.add_argument("--out", required=True)
     review.add_argument("--result", required=True)
@@ -99,6 +103,8 @@ def main(argv=None):
         result = app.flow(args.out, args.function, args.symbol, args.parameter, args.value, args.direction, args.budget)
     elif args.cmd == "locks":
         result = app.locks(args.out, args.object, args.lock)
+    elif args.cmd == "aliases":
+        result = app.aliases(args.out, args.object, args.function)
     elif args.cmd == "validate":
         result = app.validate(args.out)
     elif args.cmd == "review-import":

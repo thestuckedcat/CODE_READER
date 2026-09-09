@@ -1,4 +1,4 @@
-# 0.5 current capabilities and limits
+# 0.6 current capabilities and limits
 
 This file is the current summary. Historical snapshots remain under `update/`.
 
@@ -14,6 +14,7 @@ This file is the current summary. Historical snapshots remain under `update/`.
 | Native Clang CFG | Implemented source and historically verified on Linux Clang 18; current Windows/WSL runtime does not bundle the C++ development toolchain, so those tests report skipped |
 | Scalar dataflow summaries | Implemented only when native CFG is available; field/alias/path feasibility remain unsupported |
 | Lock and shared-state analysis | Implemented for Clang-resolved common lock APIs, lexical regions, static/global accesses and conservative conflict pairs |
+| Field alias and callback candidates | Implemented for address-of/pointer-copy chains, one-level fields, argument bindings, lock ownership summaries and callback-field candidates in tested fixtures |
 | VS Code extension | Not implemented |
 
 ## Non-negotiable limits
