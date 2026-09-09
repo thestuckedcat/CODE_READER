@@ -5,7 +5,7 @@ description: Analyze C/C++ SDK repositories with evaluated CMake/Clang evidence,
 
 # SDK Code Atlas
 
-Use the repository-local launcher. Version **0.7.0** establishes layered
+Use the repository-local launcher. Version **0.8.0** establishes layered
 application/domain/infrastructure/interface boundaries while preserving schema
 0.1 compatibility. It is a prototype; do not generalize fixture evidence to
 unsupported C/C++ semantics.
@@ -53,6 +53,10 @@ or incremental update is needed.
   with `aliases --out`. Treat casts, arrays, pointer arithmetic, branch
   feasibility, cross-function callback lifecycle and complex lock wrappers as
   `may/unknown`; see the numbered capability brief.
+- Virtual dispatch enumerates matching methods in evidenced derived types.
+  `open_world` candidates remain `may` with unknown targets possible;
+  language-level `final` closes the set, and an explicitly qualified call is
+  static exact. Do not treat the analyzed workspace as a closed program.
 
 ## Delivery and maintenance
 

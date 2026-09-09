@@ -1,4 +1,4 @@
-# 0.7 current capabilities and limits
+# 0.8 current capabilities and limits
 
 This file is the current summary. Historical snapshots remain under `update/`.
 
@@ -7,7 +7,7 @@ This file is the current summary. Historical snapshots remain under `update/`.
 | Isolated Windows/Linux runtime | Implemented and platform-tested for Python dependencies, CMake, Ninja, libclang and viewer DOM dependency |
 | CMake/compdb intake | Implemented for tested parent, child, target closure, generated-header and response-file scenarios |
 | Clang semantic extraction | Implemented with exact/may provenance and parse-failure isolation |
-| Bounded call graph | Implemented for direct, virtual/indirect boundary, overload, recursion and caller/callee fixtures |
+| Bounded call graph | Implemented for direct calls, recursion, overloads and C++ virtual candidates; virtual sets distinguish qualified static exact, language-final closed exact and non-final open-world may |
 | TU incremental cache | Implemented for source/header/environment/negative-search invalidation fixtures |
 | Agent review import | Implemented with snapshot, endpoint and source-read freshness validation |
 | Offline HTML | Implemented; DOM behavior tested, real browser layout and large-graph performance not yet accepted |
@@ -21,7 +21,7 @@ This file is the current summary. Historical snapshots remain under `update/`.
 
 The tool does not prove runtime frequency, thread reachability or interleaving, a
 complete happens-before relation, condition-variable ordering, arbitrary pointer
-effects, exact multi-target disambiguation, exact virtual targets, complete path feasibility, cross-function callback lifecycle, kernel registration
+effects, exact multi-target disambiguation, arbitrary C++ override semantics across unavailable code, complete path feasibility, cross-function callback lifecycle, kernel registration
 semantics, or a unique top-level entry. Missing configuration and parse failures
 remain visible rather than being replaced with textual guesses.
 

@@ -20,6 +20,7 @@ FEATURES = {
     "lock-analysis": ["test_pipeline.PipelineTest.test_08_lock_and_shared_state_parallelism"],
     "field-alias-analysis": ["test_pipeline.PipelineTest.test_09_field_alias_argument_and_callback_candidates"],
     "advanced-alias-concurrency": ["test_pipeline.PipelineTest.test_10_multi_alias_nested_callback_lifecycle_and_wrapper_lock"],
+    "virtual-dispatch-analysis": ["test_pipeline.PipelineTest.test_11_virtual_hierarchy_candidates_and_closed_dispatch"],
 }
 
 

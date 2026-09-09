@@ -223,19 +223,31 @@ def extract(unit,roots,rules=None):
         kind=c.kind.name
         if kind in FUNCTIONS and c.is_definition() and inside(c):
             identity=base(c);fid='f_'+digest([identity,c.type.spelling,unit['id']])[:24]
+            semantic_parent=c.semantic_parent
+            owning_type_base=base(semantic_parent) if semantic_parent and semantic_parent.kind.name in ('STRUCT_DECL','CLASS_DECL','UNION_DECL') else None
+            tokens={token.spelling for token in c.get_tokens()}
             params=[]
             for i,p in enumerate(c.get_arguments() or []):
                 pid=var(p);params.append(dict(id=pid,name=p.spelling,type=p.type.spelling,index=i))
             put('function',c,id=fid,base_id=identity,name=c.spelling,display_name=c.displayname,
                 signature=c.type.spelling,parameters=params,return_type=c.result_type.spelling,
-                storage=c.storage_class.name,summary=c.brief_comment or '功能简介待审阅；可查看签名与已提取的调用。',summary_origin='source_comment' if c.brief_comment else 'missing')
+                storage=c.storage_class.name,owning_type_base=owning_type_base,
+                is_virtual=bool(kind=='CXX_METHOD' and c.is_virtual_method()),
+                is_pure_virtual=bool(kind=='CXX_METHOD' and c.is_pure_virtual_method()),is_final='final' in tokens,
+                summary=c.brief_comment or '功能简介待审阅；可查看签名与已提取的调用。',summary_origin='source_comment' if c.brief_comment else 'missing')
             owner=fid
             ir.append(dict(id=fid,format='clang_cursor_operations',cfg_status='unsupported',operations=[]))
             analyze_concurrency(c,fid)
             analyze_aliases(c,fid)
         elif kind in TYPES and inside(c) and c.spelling:
             fields=[dict(id=var(f),name=f.spelling,type=f.type.spelling,offset_bits=f.get_field_offsetof()) for f in c.get_children() if f.kind.name=='FIELD_DECL']
-            put('type',c,id=base(c)+'_'+unit['id'][:12],name=c.spelling,type_kind=kind,fields=fields,size_bytes=c.type.get_size(),layout_configuration=unit['id'])
+            bases=[]
+            for specifier in (child for child in c.get_children() if child.kind.name=='CXX_BASE_SPECIFIER'):
+                declaration=specifier.type.get_declaration()
+                if declaration:bases.append(base(declaration))
+            put('type',c,id=base(c)+'_'+unit['id'][:12],base_id=base(c),name=c.spelling,type_kind=kind,fields=fields,
+                base_type_ids=sorted(set(bases)),is_final='final' in {token.spelling for token in c.get_tokens()},
+                size_bytes=c.type.get_size(),layout_configuration=unit['id'])
         elif kind=='VAR_DECL' and inside(c):
             vid=var(c);put('object',c,id=vid,name=c.spelling,type=c.type.spelling,owner=owner,
                           storage=c.storage_class.name,lifetime='static' if not owner or c.storage_class.name=='STATIC' else 'automatic')
@@ -245,6 +257,7 @@ def extract(unit,roots,rules=None):
         elif kind=='CALL_EXPR' and owner:
             ref=c.referenced;target=base(ref) if ref and ref.kind.name in FUNCTIONS else None
             virtual=bool(ref and ref.kind.name=='CXX_METHOD' and ref.is_virtual_method())
+            expression=raw(c);qualified=virtual and '::' in expression.split('(',1)[0]
             cid='c_'+digest([owner,anchor(c)])[:24]
             ref_path=str(Path(str(ref.location.file)).resolve()) if ref and ref.location.file else None
             stop=classify(ref_path,roots,rules,bool(ref and ref.location.is_in_system_header))
@@ -254,8 +267,13 @@ def extract(unit,roots,rules=None):
             args=[]
             for i,a in enumerate(c.get_arguments()):args.append(dict(index=i,expression=raw(a),sources=refs(a),function_sources=function_refs(a),evidence_ids=[anchor(a)]))
             put('callsite',c,id=cid,owner=owner,callee=c.spelling or raw(c).split('(')[0],target_base=target,
-                dispatch='virtual' if virtual else 'direct' if target else 'indirect',arguments=args,guards=guards,
-                expression=raw(c),target_declaration=ref_path,target_definition=definition_path,boundary_kind=stop,unknown_target_possible=virtual or not bool(target))
+                dispatch='direct' if qualified or not virtual and target else 'virtual' if virtual else 'indirect',arguments=args,guards=guards,
+                expression=expression,target_declaration=ref_path,target_definition=definition_path,boundary_kind=stop,
+                virtual_qualified=qualified,static_receiver_type_base=base(ref.semantic_parent) if virtual and ref.semantic_parent else None,
+                virtual_method_name=ref.spelling if virtual else None,
+                virtual_parameter_types=[parameter.type.spelling for parameter in ref.get_arguments()] if virtual else [],
+                virtual_method_final=virtual and 'final' in {token.spelling for token in ref.get_tokens()},
+                unknown_target_possible=virtual and not qualified or not bool(target))
         elif kind in ('BINARY_OPERATOR','COMPOUND_ASSIGNMENT_OPERATOR') and owner:
             ch=list(c.get_children())
             if len(ch)>=2:

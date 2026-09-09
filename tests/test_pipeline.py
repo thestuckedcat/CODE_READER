@@ -31,7 +31,9 @@ class PipelineTest(unittest.TestCase):
   self.assertTrue(any(t['name']=='Config' and len(t['fields'])==2 for t in g['types']))
   self.assertTrue(any(o['name']=='settings' and o['lifetime']=='static' for o in g['objects']))
   virtual=[c for c in g['callsites'] if c['dispatch']=='virtual'];self.assertTrue(virtual)
-  self.assertTrue(all(e['certainty']=='may' for c in virtual for e in g['call_targets'] if e['callsite']==c['id']))
+  for call in virtual:
+   certainties={e['certainty'] for e in g['call_targets'] if e['callsite']==call['id']}
+   self.assertEqual(certainties,{'exact'} if call.get('virtual_candidate_set')=='closed_by_final' else {'may'})
   self.assertTrue(any(i['kind']=='semantic_unresolved' for i in g['issues']))
   self.assertTrue(any(f['relation']=='argument_binding' for f in g['flow_edges']))
  def test_02_cache_and_incremental(self):
@@ -124,4 +126,26 @@ class PipelineTest(unittest.TestCase):
   self.assertIn(gate,access['held_lock_ids'])
   result=json.loads(self.cli('aliases','--out',str(self.out),'--function','multi_nested_write').stdout)
   self.assertEqual(result['field_accesses'][0]['certainty'],'may')
+ def test_11_virtual_hierarchy_candidates_and_closed_dispatch(self):
+  self.cli(*self.base);g,_=self.graph();functions={row['id']:row for row in g['functions']}
+  owner=lambda call:functions[call['owner']]['name']
+  opened=next(call for call in g['callsites'] if owner(call)=='dispatch' and call['callee']=='work')
+  opened_edges=[edge for edge in g['call_targets'] if edge['callsite']==opened['id']]
+  self.assertEqual(opened['virtual_candidate_set'],'open_world');self.assertTrue(opened['unknown_target_possible'])
+  self.assertEqual({functions[edge['target']]['owning_type_base'] for edge in opened_edges},
+                   {row['base_id'] for row in g['types'] if row['name'] in ('Base','DerivedA','DerivedB')})
+  self.assertTrue(all(edge['certainty']=='may' and edge['candidate_set_status']=='open_world' for edge in opened_edges))
+  closed=next(call for call in g['callsites'] if owner(call)=='final_dispatch' and call['callee']=='run')
+  closed_edges=[edge for edge in g['call_targets'] if edge['callsite']==closed['id']]
+  self.assertEqual(closed['virtual_candidate_set'],'closed_by_final');self.assertFalse(closed['unknown_target_possible'])
+  self.assertEqual(len(closed_edges),1);self.assertEqual(closed_edges[0]['certainty'],'exact')
+  qualified=next(call for call in g['callsites'] if owner(call)=='qualified_dispatch' and call['callee']=='work')
+  qualified_edges=[edge for edge in g['call_targets'] if edge['callsite']==qualified['id']]
+  self.assertEqual(qualified['dispatch'],'direct');self.assertEqual(qualified['virtual_candidate_set'],'static_exact')
+  self.assertEqual(len(qualified_edges),1);self.assertEqual(qualified_edges[0]['certainty'],'exact')
+  abstract=next(call for call in g['callsites'] if owner(call)=='abstract_dispatch' and call['callee']=='execute')
+  abstract_edges=[edge for edge in g['call_targets'] if edge['callsite']==abstract['id']]
+  self.assertEqual(abstract['virtual_candidate_set'],'open_world');self.assertTrue(abstract['unknown_target_possible'])
+  self.assertEqual(len(abstract_edges),1);self.assertEqual(functions[abstract_edges[0]['target']]['name'],'execute')
+  self.assertEqual(abstract_edges[0]['certainty'],'may')
 if __name__=='__main__':unittest.main(verbosity=2)

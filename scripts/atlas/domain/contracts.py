@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from typing import Tuple
 
-TOOL_VERSION = "0.7.0"
+TOOL_VERSION = "0.8.0"
 SCHEMA_VERSION = "0.1"
 
 

@@ -8,26 +8,34 @@ def merge(results):
         for f in result['facts']:by_kind[f['kind']][f['id']]=dict(f)
     fs=list(by_kind['function'].values()); index=defaultdict(list)
     for f in fs:index[f['base_id']].append(f)
-    calls=list(by_kind['callsite'].values());edges=[];issues=[];flows=list(by_kind['flow'].values())
+    calls=list(by_kind['callsite'].values());edges=[];issues=[];flows=list(by_kind['flow'].values());types=list(by_kind['type'].values())
+    from .virtual_dispatch import analyze as analyze_virtual_dispatch
+    virtual_resolutions=analyze_virtual_dispatch(fs,types,calls)
     def issue(c,kind,reason):
         row=dict(id='i_'+digest([c['id'],kind])[:24],kind=kind,subject_id=c['id'],uncertain_properties=['target'],reason=reason,
                  evidence_ids=c['evidence_ids'],affected_scope=c.get('owner'),blocking=False,next_action='review' if kind=='semantic_unresolved' else 'stop_at_boundary',status='unresolved',input_hash=digest(c))
         issues.append(row);return row['id']
     for c in calls:
-        targets=index.get(c['target_base'],[])
-        local=[f for f in targets if set(f.get('tu_ids',[]))&set(c.get('tu_ids',[]))]
-        same_build=[f for f in targets if f.get('build_id')==c.get('build_id')]
-        targets=local or same_build or targets
+        resolution=virtual_resolutions.get(c['id'])
+        candidate_bases=resolution['candidate_base_ids'] if resolution else [c.get('target_base')]
+        targets=[]
+        for candidate_base in candidate_bases:
+            variants=index.get(candidate_base,[])
+            local=[f for f in variants if set(f.get('tu_ids',[]))&set(c.get('tu_ids',[]))]
+            same_build=[f for f in variants if f.get('build_id')==c.get('build_id')]
+            targets.extend(local or same_build or variants)
+        if resolution:c.update(virtual_candidate_set=resolution['candidate_set_status'],unknown_target_possible=resolution['unknown_target_possible'],virtual_limitations=resolution['limitations'])
         if c.get('boundary_kind'):targets=[]
         if not targets:
             c['review_issue_ids']=[issue(c,'external_boundary' if c['dispatch']=='direct' else 'semantic_unresolved',
                 'Stop at '+c['boundary_kind'] if c.get('boundary_kind') else 'Implementation not found in analyzed workspace' if c['dispatch']=='direct' else 'Indirect target requires registration/alias evidence')]
-        elif c['dispatch']!='direct' or len(targets)>1:
+        elif c.get('virtual_candidate_set') in ('open_world','unresolved') or len(targets)>1:
             c['review_issue_ids']=[issue(c,'semantic_unresolved','Dispatch or definition variant has additional possible targets')]
         for f in targets:
-            exact=c['dispatch']=='direct' and len(targets)==1
+            exact=len(targets)==1 and (c['dispatch']=='direct' or c.get('virtual_candidate_set')=='closed_by_final')
             edges.append(dict(id='edge_'+digest([c['id'],f['id']])[:24],callsite=c['id'],source=c['owner'],target=f['id'],
-                              origin='deterministic_analysis',certainty='exact' if exact else 'may',evidence_ids=c['evidence_ids']))
+                              origin='deterministic_analysis',certainty='exact' if exact else 'may',
+                              candidate_set_status=c.get('virtual_candidate_set','not_virtual'),evidence_ids=c['evidence_ids']))
             for a,p in zip(c['arguments'],f['parameters']):
                 flows.append(dict(id='bind_'+digest([c['id'],f['id'],a['index']])[:24],owner=c['owner'],sources=a['sources'],target=p['id'],
                     expression=a['expression'],relation='argument_binding',certainty='may',origin='deterministic_analysis',evidence_ids=a['evidence_ids'],callsite=c['id'],limitations=['path_insensitive','alias_not_solved']))
@@ -35,8 +43,8 @@ def merge(results):
     states=[dict(id='state_'+f['id'],object_id=f['target'],owner=f['owner'],kind='write_or_initialize',evidence_ids=f['evidence_ids'],certainty='may') for f in flows if f['target'] in objids]
     states += [dict(id='state_'+r['id'],object_id=r['target'],owner=r['owner'],kind='reference',evidence_ids=r['evidence_ids'],certainty='exact') for r in by_kind['reference'].values() if r['target'] in objids]
     from .aliasing import analyze as analyze_aliases
-    aliases=analyze_aliases(by_kind,fs,calls,edges,objects,list(by_kind['type'].values()))
-    return dict(functions=fs,types=list(by_kind['type'].values()),objects=objects,callsites=calls,call_targets=edges,flow_edges=flows,state_events=states,
+    aliases=analyze_aliases(by_kind,fs,calls,edges,objects,types)
+    return dict(functions=fs,types=types,objects=objects,callsites=calls,call_targets=edges,flow_edges=flows,state_events=states,
                 annotations=[],evidence=list(by_kind['evidence'].values()),issues=issues,agent_supplements=[],**aliases)
 
 def resolve(graph,name):

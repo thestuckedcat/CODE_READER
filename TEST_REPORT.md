@@ -1,7 +1,7 @@
-# SDK Code Atlas 0.7 validation report
+# SDK Code Atlas 0.8 validation report
 
 Date: 2026-09-10. Source under test includes the layered architecture,
-repository-local runtime, bounded field/alias analysis, callback state and simple lock-wrapper projection. Runtime payloads are ignored by Git.
+repository-local runtime, bounded field/alias analysis, callback state, simple lock-wrapper projection and evidence-bounded virtual dispatch. Runtime payloads are ignored by Git.
 
 ## Windows x64
 
@@ -12,7 +12,7 @@ repository-local runtime, bounded field/alias analysis, callback state and simpl
 - Viewer dependency: linkedom 0.18.12 below the same platform runtime; a pinned,
   integrity-checked npm CLI was bootstrapped locally because the host exposed
   Node without npm.
-- Result: `doctor_exit=0`, 25 architecture/basic behavioral tests passed,
+- Result: `doctor_exit=0`, 26 architecture/basic behavioral tests passed,
   14 native CFG tests skipped, 0 failed; viewer DOM test passed; platform
   status `passed`.
 
@@ -99,3 +99,18 @@ preserved in `update/002_round2_changes.md`.
   thread reachability.
 
 Per-feature commands and captured minimum outputs are under [do_func](do_func/README.md).
+
+## Virtual dispatch feature test
+
+- Command: `runtime/windows-x86_64/venv/Scripts/python.exe scripts/run_feature_test.py virtual-dispatch-analysis`.
+- Initial focused Windows result: 1 passed in 9.920 seconds; final pure-virtual-inclusive run passed in 9.733 seconds.
+- Focused Linux/WSL result after adding the pure virtual case: 1 passed in 63.694 seconds using the repository-local runtime.
+- Full Windows platform suite: 40 discovered, 26 passed, 14 native CFG tests
+  skipped, 0 failed; Viewer candidate-set and type-qualified-node interaction passed.
+- Covered: three known Base/Derived method candidates remain `open_world/may`,
+  a final receiver produces `closed_by_final/exact`, and an explicitly
+  qualified base call produces `static_exact`; a pure virtual base call with
+  one known concrete implementation remains `open_world/may`.
+- Scope does not infer a closed world from repository enumeration and does not
+  model templates, covariant returns, using-declaration edge cases or ABI-level
+  devirtualization.

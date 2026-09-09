@@ -1,0 +1,6 @@
+test_11_virtual_hierarchy_candidates_and_closed_dispatch (test_pipeline.PipelineTest.test_11_virtual_hierarchy_candidates_and_closed_dispatch) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 9.733s
+
+OK

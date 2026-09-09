@@ -1,6 +1,6 @@
 # CODE_READER 开发计划与功能验收矩阵
 
-更新日期：2026-09-10。当前版本 SDK Code Atlas 0.7。第 1 轮 v0.2 与第 2 轮 v0.3 的功能状态分别见 [update/001_round1_changes.md](update/001_round1_changes.md)、[update/002_round2_changes.md](update/002_round2_changes.md)；v0.4 分层重构见 [update/003_refactor_changes.md](update/003_refactor_changes.md)。v0.5 完成锁分析限定子集；v0.6 完成单层字段、有限别名、参数对象传播、锁所有权摘要和回调字段候选；v0.7 增加保守多目标集合、嵌套字段、同函数回调状态和简单锁包装函数投影。路径可行性、线程可达性、完整 happens-before、复杂指针及异常语义仍未完成。
+更新日期：2026-09-10。当前版本 SDK Code Atlas 0.8。第 1 轮 v0.2 与第 2 轮 v0.3 的功能状态分别见 [update/001_round1_changes.md](update/001_round1_changes.md)、[update/002_round2_changes.md](update/002_round2_changes.md)；v0.4 分层重构见 [update/003_refactor_changes.md](update/003_refactor_changes.md)。v0.5—v0.7 依次完成限定锁分析、有限字段别名和高级别名/包装锁；v0.8 增加 C++ 继承证据、开放世界虚调用候选、`final` 封闭集合和限定静态调用。路径可行性、线程可达性、完整 happens-before、复杂指针及异常语义仍未完成。
 代码基线：[389ab62](https://github.com/thestuckedcat/CODE_READER/commit/389ab627736fecfddb792d800d69b88718133af5)；总体设计根目录补充：[d734720](https://github.com/thestuckedcat/CODE_READER/commit/d7347201f9317e8a26d436df72be22f34334ee46)。
 
 本文跟踪当前交付与后续六轮开发。每一轮是可独立验收的阶段，可拆成多个 PR；不是六次对话或承诺六个固定工期。当前基础原型记为第 0 轮，目前第 1 轮已完成限定范围技术验证，第 2 轮已交付标量子集；完整产品验收与后续阶段仍未完成。
@@ -93,7 +93,7 @@
 | R3-01 | 地址获取、指针拷贝、参数传指针的别名分析 | 已完成（限定有限闭包） | `p=&obj; q=p; q->x=v`、多分支对象与实参到形参 fixture | 单目标输出 exact；多目标保留 may 集合；数组、算术和转换仍为 may/unknown |
 | R3-02 | 字段敏感传播与全局对象副作用 | 已完成（限定成员链） | 同对象不同字段、嵌套成员、指针字段与直接字段访问 | `pair.left` 不与其他路径混淆；数组下标、联合体和复杂转换仍待实现 |
 | R3-03 | 函数指针写入、注册与调用目标 | 部分完成，同函数源码序状态 | callback 字段注册、覆盖和清除 | 输出有证据事件与 configured/cleared/may_multiple 状态；跨函数生命周期、条件可行性与多级转发仍未完成 |
-| R3-04 | 虚调用与继承候选 | 部分完成，仅保守 may | 基类指针、多个派生类、限定调用、开放类型集合 | 区分静态确定目标与动态候选；未完整覆盖的类集合不宣称唯一 |
+| R3-04 | 虚调用与继承候选 | 已完成（限定签名匹配与语言封闭证据） | 基类指针、多个派生类、`final` 类型、限定调用、开放类型集合 | 限定调用为 static exact；`final` 集合 closed/exact；非 final 为 open_world/may 并保留未知候选 |
 | R3-05 | 问题分组、Subagent 补充及配置重解析闭环 | 部分完成 | 同槽位多个调用点、矛盾提案、缺配置提案、无新证据重试 | 按共同原因去重；事实不可被模型覆盖；配置修正回到 Clang；无进展停止 |
 | R3-06 | 函数功能简介与黑盒契约 | 部分完成，仅源码注释 | 有/无注释函数，输入输出和副作用有独立真值 | 简介有来源、限制与证据；不展开时可理解输入输出；不凭名字编造行为 |
 | R3-07 | 审阅 read/search 依赖缓存 | 未完成 | 修改实际读取文件；在零结果搜索范围新增注册；不相关文件变化 | 相关审阅失效，不相关审阅复用；新增绑定不能因旧图无边而遗漏 |
